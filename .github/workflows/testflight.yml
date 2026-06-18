@@ -148,11 +148,20 @@ jobs:
             exit 1
           fi
 
+          UPLOAD_LOG="$RUNNER_TEMP/altool-upload.log"
+          set +e
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" 2>&1 | tee "$UPLOAD_LOG"
+          ALTOOL_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$ALTOOL_STATUS" -ne 0 ] || grep -E "UPLOAD FAILED|Validation failed|Failed to upload package" "$UPLOAD_LOG"; then
+            echo "::error::App Store Connect upload failed"
+            exit 1
+          fi
 
       - name: Clean up signing assets
         if: always()

@@ -93,6 +93,7 @@ GitHub Actions:
 - `project.yml`
   - XcodeGen用設定
   - iOS 26.0 deployment target
+  - iPhone向け設定（`TARGETED_DEVICE_FAMILY: "1"`）
   - `Pribye` app target
   - `PribyeTests` unit test target
 - `.github/workflows/ios.yml`
@@ -106,7 +107,7 @@ GitHub Actions:
 - `docs/TESTFLIGHT_UPLOAD.md`
 - `Pribye/Resources/Info.plist`
 - `Pribye/Resources/Assets.xcassets`
-  - `input/icon.png` をAppIconへコピー済み
+  - `input/icon.png` を元にAppIcon用のiPhone各サイズと1024px marketing iconを生成済み
 
 ### アプリ本体
 
@@ -210,6 +211,9 @@ CIを通すために以下を修正済み:
 - `Info.plist` に必須 bundle metadata を追加。
 - `project.yml` に version build settings を追加。
 - `DEVELOPMENT_TEAM` を `2QA6W85W3D` に設定。
+- TestFlight archive時に Apple Distribution 署名を明示。
+- App Store Connect upload検証に必要な `CFBundleIconName`、iPhone orientation、iPhone AppIconサイズ、iPhone対象設定を追加。
+- `altool` がupload失敗ログを出してもstep成功扱いになるケースを防ぐため、uploadログ内の失敗文字列を検出してworkflowを失敗させるように修正。
 
 ## 現在の重要な制約
 
@@ -261,7 +265,7 @@ UIとして補正画面の骨格はありますが、実補正処理はまだで
 優先度順:
 
 1. ユーザー承認後にpushする。pushすると既存の `.github/workflows/ios.yml` が走り、macOS Actions無料枠を消費する。
-2. `TestFlight Upload` workflowを手動実行し、初回archive/uploadを行う。
+2. `TestFlight Upload` workflowを手動実行し、App Store Connect uploadまで成功するか確認する。
 3. TestFlightで実機確認する。
 4. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
 5. Foundation Models実API接続を検証・実装する。

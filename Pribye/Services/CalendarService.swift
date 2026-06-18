@@ -59,9 +59,6 @@ final class EventKitCalendarService: CalendarServiceProtocol {
   }
 
   private func requestAccess() async throws -> Bool {
-    if #available(iOS 17.0, *) {
-      return try await eventStore.requestFullAccessToEvents()
-    }
-    return try await eventStore.requestAccess(to: .event)
+    try await eventStore.requestFullAccessToEvents()
   }
 }

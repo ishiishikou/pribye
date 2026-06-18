@@ -7,6 +7,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
 
+  @MainActor
   @ViewBuilder
   func makeContentView() -> some View {
     switch self {
