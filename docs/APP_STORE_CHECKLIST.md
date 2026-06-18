@@ -1,11 +1,31 @@
-# App Store公開前チェックリスト
+# App Store / TestFlight Checklist
 
-- Apple Developer Programに登録する。
-- Bundle ID `com.pribye.app` をApple Developerで作成する。
-- `project.yml` の `DEVELOPMENT_TEAM` を設定する。
-- App Store Connectでアプリ、SKU、カテゴリ、年齢制限を登録する。
-- Camera、Photos、Calendarの権限文言を実機で確認する。
-- Privacy Nutrition Labelで写真、カレンダー、広告SDKの扱いを申告する。
-- 広告SDKを入れる場合は非パーソナライズ設定を既定にし、プリント画像・OCR・タスク内容を渡していないことを確認する。
-- 課金で広告非表示にする場合はStoreKit商品IDを作成し、Sandbox購入テストを行う。
-- TestFlightで撮影、補正、OCR、AI抽出、タスク完了、カレンダー登録、CSVエクスポートを確認する。
+## Apple Developer
+- Apple Developer Program approval: done.
+- Team ID: `2QA6W85W3D`.
+- Bundle ID target: `com.pribye.app`.
+- Create an explicit App ID for `com.pribye.app` in Apple Developer.
+- Enable only the capabilities the app actually uses.
+
+## Xcode Project
+- `project.yml` sets `DEVELOPMENT_TEAM`.
+- `PRODUCT_BUNDLE_IDENTIFIER` is `com.pribye.app`.
+- `CODE_SIGN_STYLE` is `Automatic`.
+- `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` are set.
+- CI build/test passes on GitHub Actions.
+
+## App Store Connect
+- Create the app record after the Bundle ID exists.
+- Set app name, SKU, primary category, age rating, and availability.
+- Prepare screenshots, description, keywords, support URL, and privacy policy URL.
+- Complete Privacy Nutrition Label for Photos, Camera, Calendar, advertising, and analytics.
+
+## TestFlight
+- Archive and upload the first build.
+- Verify camera capture, image review/correction, OCR, task extraction, task completion, calendar registration, and CSV export.
+- Verify permission prompts for Camera, Photos, and Calendar on a real device.
+
+## Privacy / Ads / Purchases
+- Do not send print images, OCR text, or extracted task content to external AI APIs.
+- If an ad SDK is added, keep print images, OCR text, task titles, and extracted content out of ad SDK payloads.
+- If paid ad removal is added, create StoreKit product IDs and test sandbox purchases.
