@@ -26,7 +26,7 @@ enum DocumentLifecycleState: String, Codable, CaseIterable {
   case archived
 }
 
-enum AnalysisFailureReason: String, Codable, CaseIterable {
+enum AnalysisFailureReason: String, Codable, CaseIterable, Error {
   case imageError = "IMAGE_ERROR"
   case ocrError = "OCR_ERROR"
   case extractionError = "EXTRACTION_ERROR"

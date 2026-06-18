@@ -62,5 +62,3 @@ final class VisionOCRService: OCRServiceProtocol {
     }
   }
 }
-
-extension AnalysisFailureReason: Error {}
