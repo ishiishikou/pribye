@@ -1,0 +1,37 @@
+name: Pribye
+options:
+  bundleIdPrefix: com.pribye
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    DEVELOPMENT_TEAM: ""
+packages: {}
+targets:
+  Pribye:
+    type: application
+    platform: iOS
+    sources:
+      - path: Pribye
+        excludes:
+          - Resources/**
+    resources:
+      - path: Pribye/Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pribye.app
+        INFOPLIST_FILE: Pribye/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - PribyeTests
+  PribyeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PribyeTests
+    dependencies:
+      - target: Pribye

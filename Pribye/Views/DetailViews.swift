@@ -1,0 +1,200 @@
+import SwiftData
+import SwiftUI
+import UIKit
+
+struct TaskDetailLookupView: View {
+  var taskID: UUID
+  @Query private var tasks: [ExtractedTaskRecord]
+
+  var body: some View {
+    if let task = tasks.first(where: { $0.id == taskID }) {
+      TaskDetailView(task: task)
+    } else {
+      ContentUnavailableView("タスクが見つかりません", systemImage: "exclamationmark.circle")
+    }
+  }
+}
+
+struct TaskDetailView: View {
+  @Bindable var task: ExtractedTaskRecord
+  @State private var calendarMessage: String?
+  @State private var isRegisteringCalendar = false
+  private let calendarService: CalendarServiceProtocol = EventKitCalendarService()
+
+  var body: some View {
+    List {
+      Section {
+        VStack(alignment: .leading, spacing: 12) {
+          HStack {
+            TextField("タスク", text: $task.title)
+              .font(.title2.weight(.bold))
+            StatusPill(text: task.isCompleted ? "完了" : "未完了", color: task.isCompleted ? .green : .blue)
+          }
+
+          DueDateText(start: task.dueStart, end: task.dueEnd)
+            .font(.headline)
+
+          TextField("メモ", text: $task.note, axis: .vertical)
+            .lineLimit(3...6)
+        }
+        .padding(.vertical, 8)
+      }
+
+      Section("このタスクの根拠") {
+        if task.evidenceText.isEmpty {
+          Text("根拠テキストはありません")
+            .foregroundStyle(.secondary)
+        } else {
+          Text(task.evidenceText)
+          Button("ハイライトを表示") {}
+            .disabled(task.document?.sourceImageState != .available)
+        }
+      }
+
+      if let document = task.document, document.sourceImageState != .available {
+        Section {
+          Text(document.sourceImageState.message)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      Section {
+        Button(task.isCompleted ? "未完了に戻す" : "完了にする") {
+          task.setCompleted(!task.isCompleted)
+        }
+        .buttonStyle(.borderedProminent)
+
+        Button {
+          Task { await registerCalendar() }
+        } label: {
+          if isRegisteringCalendar {
+            ProgressView()
+          } else {
+            Label("カレンダーに登録", systemImage: "calendar.badge.plus")
+          }
+        }
+        .disabled(!task.hasCalendarDate || isRegisteringCalendar)
+      }
+
+      if let calendarMessage {
+        Section {
+          Text(calendarMessage)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .navigationTitle("タスク詳細")
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        Button("編集") {}
+      }
+    }
+  }
+
+  private func registerCalendar() async {
+    isRegisteringCalendar = true
+    defer { isRegisteringCalendar = false }
+
+    do {
+      task.calendarEventIdentifier = try await calendarService.register(task: task)
+      calendarMessage = "カレンダーに登録しました"
+    } catch {
+      calendarMessage = (error as? LocalizedError)?.errorDescription ?? "カレンダー登録できませんでした"
+    }
+  }
+}
+
+struct DocumentDetailLookupView: View {
+  var documentID: UUID
+  @Query private var documents: [DocumentRecord]
+
+  var body: some View {
+    if let document = documents.first(where: { $0.id == documentID }) {
+      DocumentDetailView(document: document)
+    } else {
+      ContentUnavailableView("プリントが見つかりません", systemImage: "doc.text")
+    }
+  }
+}
+
+struct DocumentDetailView: View {
+  @Environment(RouterPath.self) private var router
+  @Bindable var document: DocumentRecord
+
+  var body: some View {
+    List {
+      Section {
+        VStack(alignment: .leading, spacing: 8) {
+          TextField("プリント名", text: $document.title)
+            .font(.title2.weight(.bold))
+          Text(document.capturedAt.formatted(.dateTime.year().month().day()))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          StatusPill(text: document.status.userLabel, color: document.status == .failed ? .red : .blue)
+        }
+        .padding(.vertical, 8)
+      }
+
+      Section("抽出されたタスク") {
+        if document.tasks.isEmpty {
+          Text("タスクはありません")
+            .foregroundStyle(.secondary)
+          Button("手動でタスクを追加") {
+            router.presentedSheet = .manualTask(documentID: document.id)
+          }
+        } else {
+          ForEach(document.tasks) { task in
+            Button {
+              router.navigate(to: .task(task.id))
+            } label: {
+              TaskRowView(task: task)
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+
+      Section("元画像") {
+        if let data = document.thumbnailData, let image = UIImage(data: data) {
+          Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(maxHeight: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else {
+          Label("サムネイルはありません", systemImage: "photo")
+            .foregroundStyle(.secondary)
+        }
+
+        if document.sourceImageState != .available {
+          Text(document.sourceImageState.message)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      Section("OCR") {
+        if document.ocrText.isEmpty {
+          Text("OCR結果はありません")
+            .foregroundStyle(.secondary)
+        } else {
+          Text(document.ocrText)
+            .font(.callout)
+        }
+      }
+
+      if document.status == .failed {
+        Section {
+          Button("再解析する") {
+            document.status = .aiProcessing
+          }
+          Button("手動で登録する") {
+            router.presentedSheet = .manualTask(documentID: document.id)
+          }
+        }
+      }
+    }
+    .navigationTitle("プリント詳細")
+    .navigationBarTitleDisplayMode(.inline)
+  }
+}
