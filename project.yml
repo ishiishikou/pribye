@@ -18,11 +18,7 @@ targets:
     sources:
       - path: Pribye
         excludes:
-          - Resources/**
-    resources:
-      - path: Pribye/Resources
-        excludes:
-          - Info.plist
+          - Resources/Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pribye.app
