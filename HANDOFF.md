@@ -63,6 +63,14 @@ GitHub Actions:
 - Apple Developer の explicit App ID `com.pribye.app` 登録済み。
 - App Store Connect の New App 作成済み。
 - App Store Connect 上の状態は「提出準備中」。
+- App Store Connect API key 作成済み。
+- Apple Distribution certificate 作成済み。
+- App Store provisioning profile for `com.pribye.app` 作成済み。
+- TestFlight upload 用の GitHub Actions repository secrets 登録済み。
+
+注意:
+
+- secrets の値、`.p8`、`.p12`、provisioning profile の中身はこのリポジトリに記録しない。
 
 プロジェクト設定:
 
@@ -252,29 +260,20 @@ UIとして補正画面の骨格はありますが、実補正処理はまだで
 
 優先度順:
 
-1. App Store Connect API key を作成する。
-2. Apple Distribution certificate を作成し、`.p12` としてexportする。
-3. App Store provisioning profile for `com.pribye.app` を作成する。
-4. GitHub Actions secrets に以下を登録する。
-   - `APP_STORE_CONNECT_API_KEY_ID`
-   - `APP_STORE_CONNECT_ISSUER_ID`
-   - `APP_STORE_CONNECT_API_KEY_P8`
-   - `BUILD_CERTIFICATE_BASE64`
-   - `P12_PASSWORD`
-   - `BUILD_PROVISION_PROFILE_BASE64`
-   - `KEYCHAIN_PASSWORD`
-5. `TestFlight Upload` workflowを手動実行し、初回archive/uploadを行う。
-6. TestFlightで実機確認する。
-7. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
-8. Foundation Models実API接続を検証・実装する。
-9. StoreKit課金と広告SDKの採否・実装を決める。
+1. ユーザー承認後にpushする。pushすると既存の `.github/workflows/ios.yml` が走り、macOS Actions無料枠を消費する。
+2. `TestFlight Upload` workflowを手動実行し、初回archive/uploadを行う。
+3. TestFlightで実機確認する。
+4. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
+5. Foundation Models実API接続を検証・実装する。
+6. StoreKit課金と広告SDKの採否・実装を決める。
 
 ## 次チャットでの推奨依頼
 
 ```text
 HANDOFF.md を読んで、プリバイ開発の現在地を把握してください。
 pushはまだしないでください。GitHub Actions無料枠を節約したいので、必要な作業はまずローカルで止めてください。
-次は、App Store Connect API key / Distribution certificate / provisioning profile / GitHub Actions secrets の準備が終わっているか確認し、未完了ならユーザーの作業を案内してください。
+TestFlight upload 用のGitHub Actions secretsは登録済みです。
+次は、ユーザー承認後にpushし、`TestFlight Upload` workflowを手動実行してください。
 ```
 
 ## 注意
