@@ -1,78 +1,109 @@
 # AGENTS.md
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+LLM コーディング作業で起きがちなミスを減らすための行動指針です。プロジェクト固有の指示として扱い、必要に応じて他の資料と合わせて参照してください。
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+**トレードオフ:** この指針は速度より慎重さを優先します。ごく小さな作業では、状況に応じて判断してください。
 
-## 1. Think Before Coding
+## 1. 実装前に考える
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+**推測で進めない。混乱を隠さない。判断材料とトレードオフを明示する。**
 
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+実装前に:
 
-## 2. Simplicity First
+- 前提を明示する。不確かな場合は質問する。
+- 複数の解釈がある場合は、黙って選ばずに提示する。
+- より単純な方法がある場合は、それを伝える。必要なら方針に異議を出す。
+- 不明点がある場合は止まり、何が分からないのかを具体的に述べて質問する。
 
-**Minimum code that solves the problem. Nothing speculative.**
+## 2. シンプルにする
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+**求められた問題を解く最小限のコードにする。憶測で機能を足さない。**
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+- 依頼されていない機能を追加しない。
+- 1回しか使わないコードのために抽象化しない。
+- 求められていない柔軟性や設定項目を追加しない。
+- 起こり得ないケースのために過剰なエラーハンドリングをしない。
+- 200行で書いたものが50行で済むなら、書き直して簡単にする。
 
-## 3. Surgical Changes
+自問すること: 「シニアエンジニアが見て、これは作り込みすぎだと言うか？」。そうなら簡素化する。
 
-**Touch only what you must. Clean up only your own mess.**
+## 3. 変更は外科的に行う
 
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+**必要な箇所だけを触る。自分が出した差分だけを片付ける。**
 
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+既存コードを編集するとき:
 
-The test: Every changed line should trace directly to the user's request.
+- 依頼と無関係な周辺コード、コメント、整形を「改善」しない。
+- 壊れていないものをリファクタリングしない。
+- 自分なら別の書き方をしたくても、既存のスタイルに合わせる。
+- 無関係な未使用コードに気づいた場合は、削除せずに報告する。
 
-## 4. Goal-Driven Execution
+自分の変更で不要になったものがある場合:
 
-**Define success criteria. Loop until verified.**
+- 自分の変更によって未使用になった import、変数、関数は削除する。
+- もともと存在した未使用コードは、依頼がない限り削除しない。
 
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+判定基準: 変更したすべての行が、ユーザーの依頼に直接つながっていること。
 
-For multi-step tasks, state a brief plan:
+## 4. ゴール駆動で進める
+
+**成功条件を定義し、検証できるところまでループする。**
+
+作業を検証可能なゴールに変換する:
+
+- 「バリデーションを追加」→「不正入力のテストを書き、それを通す」
+- 「バグを直す」→「再現テストを書き、それを通す」
+- 「Xをリファクタリング」→「変更前後でテストが通ることを確認する」
+
+複数ステップの作業では、短い計画を示す:
+
+```text
+1. [作業] → 検証: [確認方法]
+2. [作業] → 検証: [確認方法]
+3. [作業] → 検証: [確認方法]
 ```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
+
+強い成功条件があれば自律的に進められる。弱い成功条件、たとえば「動くようにする」だけの場合は、必要に応じて確認する。
+
+## 5. GitHub Actions / Push 方針
+
+**意図せず CI 分を消費しない。**
+
+このリポジトリは private であり、GitHub-hosted macOS runner は GitHub Actions の無料枠を消費します。iOS CI は Linux ジョブに比べて高くつきやすいです。
+
+- ユーザーの明示的な承認なしに push しない。
+- まずローカル commit を優先し、push はユーザーが明示的に依頼したときだけ行う。
+- CI に関わる変更では、小さな push を何度も繰り返さない。
+- workflow を追加・変更する前に、その変更で GitHub Actions が走るか、無料枠または有料分を消費し得るかを説明する。
+- TestFlight / archive workflow は `workflow_dispatch` にし、push のたびに自動実行されないようにする。
+- 引き継ぎやドキュメント更新を依頼された場合は、明示的に push を頼まれない限り、ローカル commit までにして origin より ahead の状態で止める。
+
+## 6. HANDOFF.md の更新
+
+**引き継ぎ情報の更新漏れを防ぐ。**
+
+非自明な作業をした場合、完了前に `HANDOFF.md` の更新要否を確認する。次のいずれかが変わった場合は `HANDOFF.md` を更新する:
+
+- 現在のプロジェクト状態
+- 完了済み作業
+- 次にやること
+- 制約、認証情報やセットアップ状況、CI / App Store 状態
+- 重要な判断、前提、未解決事項
+
+`HANDOFF.md` の更新だけを理由に push しない。push は必ずユーザーの明示的な承認後に行う。
+
+## 7. PowerShell での文字化け回避
+
+**日本語ファイルを読むときは UTF-8 出力を明示する。**
+
+PowerShell で `AGENTS.md`、`HANDOFF.md`、`input` 配下の日本語資料などを読む場合は、文字化けを避けるために UTF-8 を指定する:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); Get-Content -Raw -Encoding UTF8 -LiteralPath HANDOFF.md
 ```
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-## 5. GitHub Actions / Push Policy
-
-**Do not spend CI minutes accidentally.**
-
-This repository is private, and GitHub-hosted macOS runners consume GitHub Actions minutes. iOS CI jobs can be relatively expensive compared with Linux jobs.
-
-- Do not push without explicit user approval.
-- Prefer local commits first; push only when the user explicitly asks.
-- Avoid small repeated pushes when working on CI-sensitive changes.
-- Before adding or changing workflows, explain whether the change will trigger GitHub Actions and whether it may consume free or paid minutes.
-- TestFlight/archive workflows must use `workflow_dispatch` and must not run automatically on every push.
-- If asked to prepare handoff or documentation updates, commit locally and leave the branch ahead of origin unless the user explicitly asks to push.
+複数ファイルを読む場合も、同じように `[Console]::OutputEncoding` と `-Encoding UTF8` を使う。文字化けした出力を根拠に判断しない。
 
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**この指針が機能している状態:** 不要な差分が減り、作り込みすぎによる手戻りが減り、実装後ではなく実装前に確認すべきことを確認できている。
