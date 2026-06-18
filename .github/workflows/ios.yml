@@ -22,14 +22,8 @@ jobs:
         run: xcodegen generate
       - name: Build and test
         run: |
-          DEVICE_ID=$(xcodebuild -showdestinations -project Pribye.xcodeproj -scheme Pribye | awk -F 'id:' '/platform:iOS Simulator/ && /name:iPhone/ { split($2, parts, ","); print parts[1]; exit }')
-          if [ -z "$DEVICE_ID" ]; then
-            echo "No iPhone Simulator destination found."
-            xcodebuild -showdestinations -project Pribye.xcodeproj -scheme Pribye
-            exit 1
-          fi
           xcodebuild test \
             -project Pribye.xcodeproj \
             -scheme Pribye \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -destination "platform=iOS Simulator,name=iPhone 17,OS=latest" \
             CODE_SIGNING_ALLOWED=NO
