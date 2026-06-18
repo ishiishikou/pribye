@@ -43,6 +43,7 @@ GitHub Actions:
 
 - workflow: `.github/workflows/ios.yml`
 - `xcodegen generate` と `xcodebuild test` を macOS runner で実行
+- TestFlight upload用の手動実行workflow `.github/workflows/testflight.yml` をローカルで追加済み
 - 最新run `27737585159` は success
 - 直近の成功run:
   - `27737585159` `Document TestFlight upload preparation`
@@ -81,6 +82,14 @@ GitHub Actions:
 - `docs/APP_STORE_CHECKLIST.md`
 - `docs/TESTFLIGHT_UPLOAD.md`
 
+ローカルで反映済み・未pushの作業:
+
+- `AGENTS.md` を日本語化し、`HANDOFF.md` 更新ルールとPowerShell文字化け回避ルールを追記済み。
+- `.github/workflows/testflight.yml` を追加済み。`workflow_dispatch` の手動実行のみで、pushだけではarchive/uploadしない。
+- `docs/TESTFLIGHT_UPLOAD.md` を日本語の具体手順に更新済み。
+- `HANDOFF.md` をこの状態に合わせて更新済み。
+- ローカルcommit済み。pushはまだしていない。
+
 ## 実装済み
 
 ### プロジェクト構成
@@ -92,6 +101,9 @@ GitHub Actions:
   - `PribyeTests` unit test target
 - `.github/workflows/ios.yml`
   - GitHub Actions macOS runnerで `xcodegen generate` と `xcodebuild test` を実行
+- `.github/workflows/testflight.yml`
+  - GitHub Actions macOS runnerで署名付きarchiveを作成し、TestFlightへuploadする手動実行workflow
+  - `workflow_dispatch` のみで自動実行しない
 - `.gitignore`
 - `README.md`
 - `docs/APP_STORE_CHECKLIST.md`
@@ -263,19 +275,21 @@ UIとして補正画面の骨格はありますが、実補正処理はまだで
    - `P12_PASSWORD`
    - `BUILD_PROVISION_PROFILE_BASE64`
    - `KEYCHAIN_PASSWORD`
-5. `workflow_dispatch` の TestFlight upload workflow を追加する。
-6. 初回archive/uploadを実行する。
-7. TestFlightで実機確認する。
-8. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
-9. Foundation Models実API接続を検証・実装する。
-10. StoreKit課金と広告SDKの採否・実装を決める。
+5. 今回のローカル変更を確認し、必要ならローカルcommitする。
+6. ユーザー承認後にpushする。pushすると既存の `.github/workflows/ios.yml` が走り、macOS Actions無料枠を消費する。
+7. `TestFlight Upload` workflowを手動実行し、初回archive/uploadを行う。
+8. TestFlightで実機確認する。
+9. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
+10. Foundation Models実API接続を検証・実装する。
+11. StoreKit課金と広告SDKの採否・実装を決める。
 
 ## 次チャットでの推奨依頼
 
 ```text
 HANDOFF.md を読んで、プリバイ開発の現在地を把握してください。
 pushはまだしないでください。GitHub Actions無料枠を節約したいので、まずはローカルcommitまでで止めてください。
-次は TestFlight upload のため、App Store Connect API key / Distribution certificate / provisioning profile / GitHub Actions secrets の準備手順を具体的に案内してください。
+TestFlight upload workflow と docs/TESTFLIGHT_UPLOAD.md の差分を確認してください。
+次は、App Store Connect API key / Distribution certificate / provisioning profile / GitHub Actions secrets の準備が終わっているか確認し、未完了ならユーザーの作業を案内してください。
 ```
 
 ## 注意
