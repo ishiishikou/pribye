@@ -1,4 +1,4 @@
-# Agent.md
+# AGENTS.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
@@ -59,6 +59,19 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. GitHub Actions / Push Policy
+
+**Do not spend CI minutes accidentally.**
+
+This repository is private, and GitHub-hosted macOS runners consume GitHub Actions minutes. iOS CI jobs can be relatively expensive compared with Linux jobs.
+
+- Do not push without explicit user approval.
+- Prefer local commits first; push only when the user explicitly asks.
+- Avoid small repeated pushes when working on CI-sensitive changes.
+- Before adding or changing workflows, explain whether the change will trigger GitHub Actions and whether it may consume free or paid minutes.
+- TestFlight/archive workflows must use `workflow_dispatch` and must not run automatically on every push.
+- If asked to prepare handoff or documentation updates, commit locally and leave the branch ahead of origin unless the user explicitly asks to push.
 
 ---
 
