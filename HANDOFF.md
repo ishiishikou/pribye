@@ -2,7 +2,7 @@
 
 ## 目的
 
-このファイルは、新規セッションで `HANDOFF.md` を読むだけで、プリバイの開発経緯・現在の進捗・次に着手すべきことが分かるようにするための引き継ぎ資料です。
+このファイルは、新規セッションで `HANDOFF.md` を読むだけで、プリバイの現在地、完了済み作業、次に着手すべきこと、注意点が分かるようにするための引き継ぎ資料です。
 
 ## アプリ概要
 
@@ -19,33 +19,71 @@
 - `input/画面案.png`
 - `input/icon.png`
 
-仕様上の重要な前提:
+重要な前提:
 
 - 個人利用が主目的。
-- ただしApp Store公開を目指す。
+- App Store公開を目指す。
 - ユーザーはMacを持っていない。
-- クラウドビルド前提。
+- Windowsで編集し、iOSビルドはGitHub ActionsのmacOS runnerで行う。
 - iOS 26+ / SwiftUI / SwiftData / Vision OCR / Apple Intelligence・Foundation Models前提。
 - 外部AI APIへプリント画像、OCR全文、抽出タスク内容を送信しない。
 
-## 設計判断
+## GitHub / CI 状態
 
-最初に設計矛盾を確認し、以下の方針で進めることにしました。
+Repository:
 
-- 新規iOSアプリとして作成する。
-- ローカルWindowsでは編集中心、ビルドはGitHub ActionsのmacOS runnerで行う。
-- Xcodeプロジェクトは直接コミットせず、`project.yml` からXcodeGenで生成する。
-- SwiftUI + SwiftDataで実装する。
-- 端末対象はiOS 26+、Apple Intelligence対応端末のみ。
-- Apple Intelligence非対応端末では起動時に「この端末ではAI解析を利用できません」と表示する。
-- `DocumentAnalyzer` プロトコルを置き、Foundation Models実装をアプリ本体から分離する。
-- Foundation Modelsの実API接続は実機/iOS 26環境で検証が必要なため、現時点ではCIでも動かせるヒューリスティック抽出にフォールバックしている。
+- `https://github.com/ishiishikou/pribye.git`
+- default branch: `main`
+
+最新push済みcommit:
+
+- `1ae697e Document TestFlight upload preparation`
+
+GitHub Actions:
+
+- workflow: `.github/workflows/ios.yml`
+- `xcodegen generate` と `xcodebuild test` を macOS runner で実行
+- 最新run `27737585159` は success
+- 直近の成功run:
+  - `27737585159` `Document TestFlight upload preparation`
+  - `27737437580` `Mark Bundle ID registration complete`
+  - `27737095844` `Configure Apple development team`
+  - `27736637531` `Add required app bundle metadata`
+
+注意:
+
+- private repository の GitHub-hosted macOS runner は GitHub Actions の無料枠を消費する。
+- `main` へのpushでCIが走るため、無料枠節約のため、次チャットでは必要なときだけpushする。
+- ローカルcommitだけならGitHub Actionsは走らない。
+
+## Apple Developer / App Store Connect 状態
+
+完了済み:
+
+- Apple Developer Program 承認済み。
+- Team ID: `2QA6W85W3D`
+- Bundle ID: `com.pribye.app`
+- Apple Developer の explicit App ID `com.pribye.app` 登録済み。
+- App Store Connect の New App 作成済み。
+- App Store Connect 上の状態は「提出準備中」。
+
+プロジェクト設定:
+
+- `project.yml`
+  - `DEVELOPMENT_TEAM: 2QA6W85W3D`
+  - `PRODUCT_BUNDLE_IDENTIFIER: com.pribye.app`
+  - `CODE_SIGN_STYLE: Automatic`
+  - `MARKETING_VERSION: "1.0"`
+  - `CURRENT_PROJECT_VERSION: "1"`
+
+関連ドキュメント:
+
+- `docs/APP_STORE_CHECKLIST.md`
+- `docs/TESTFLIGHT_UPLOAD.md`
 
 ## 実装済み
 
 ### プロジェクト構成
-
-以下を追加済みです。
 
 - `project.yml`
   - XcodeGen用設定
@@ -56,13 +94,15 @@
   - GitHub Actions macOS runnerで `xcodegen generate` と `xcodebuild test` を実行
 - `.gitignore`
 - `README.md`
+- `docs/APP_STORE_CHECKLIST.md`
+- `docs/TESTFLIGHT_UPLOAD.md`
 - `Pribye/Resources/Info.plist`
 - `Pribye/Resources/Assets.xcassets`
   - `input/icon.png` をAppIconへコピー済み
 
 ### アプリ本体
 
-追加済みの主なファイル:
+主なファイル:
 
 - `Pribye/App/PribyeApp.swift`
 - `Pribye/App/AppView.swift`
@@ -84,7 +124,7 @@
 
 ### モデル
 
-`Document -> Page -> OCRObservation -> ExtractedTask` を基本構造として実装済みです。
+`Document -> Page -> OCRObservation -> ExtractedTask` を基本構造として実装済み。
 
 - `DocumentRecord`
   - プリント単位
@@ -145,31 +185,23 @@ UI方針:
 - `PribyeTests/DocumentAnalyzerTests.swift`
 - `PribyeTests/ModelStateTests.swift`
 
-テスト対象:
+対象:
 
 - 日付/期間パース
 - ヒューリスティックAI抽出
 - タスク完了状態とライフサイクル
 - Document状態表示
 
-## 確認済み
+## 直近で解決した問題
 
-Windowsローカルで確認済み:
+CIを通すために以下を修正済み:
 
-- `git diff --check` はOK
-- Asset JSONのパースはOK
-
-未確認:
-
-- Swiftコンパイル
-- XcodeGen生成
-- iOS Simulatorでのビルド/テスト
-
-理由:
-
-- 現在のWindows環境には `swift` がない
-- 現在のWindows環境には `xcodegen` がない
-- 実際のiOSビルドはGitHub ActionsのmacOS runnerで確認する想定
+- GitHub Actions の Simulator destination 選択を安定化。
+- Swift 6 で `AnalysisFailureReason` の `Error` 適合を定義元へ移動。
+- SwiftUI の `sheet` modifier 名衝突を修正。
+- `Info.plist` に必須 bundle metadata を追加。
+- `project.yml` に version build settings を追加。
+- `DEVELOPMENT_TEAM` を `2QA6W85W3D` に設定。
 
 ## 現在の重要な制約
 
@@ -179,8 +211,8 @@ Windowsローカルで確認済み:
 
 理由:
 
-- iOS 26 SDKとApple Intelligence対応実機での検証が必要
-- CI上でも扱える状態を優先し、現時点ではヒューリスティック抽出へフォールバックしている
+- iOS 26 SDKとApple Intelligence対応実機での検証が必要。
+- CI上でも扱える状態を優先し、現時点ではヒューリスティック抽出へフォールバックしている。
 
 次の実装者は、Foundation Models公式APIを確認し、`FoundationModelsDocumentAnalyzer.analyze(pages:)` の内部だけを差し替えるのがよいです。
 
@@ -220,35 +252,37 @@ UIとして補正画面の骨格はありますが、実補正処理はまだで
 
 優先度順:
 
-1. GitHubへpushしてActionsでビルド確認する。
-2. `xcodegen generate` や `xcodebuild test` のCIエラーを修正する。
-3. iOS 26 SDK/Xcode 26がGitHub Actions runnerで利用できるか確認する。
-4. `FoundationModelsDocumentAnalyzer` に実際のFoundation Models API呼び出しを接続する。
-5. 実機カメラ撮影を `CaptureFlowView` に接続する。
-6. 写真ライブラリ保存、`assetIdentifier`、画像ハッシュ、原本削除/権限解除/変更検知を実装する。
-7. 四隅ドラッグ補正と画像変換を実装する。
-8. OCR座標から根拠ハイライト表示を実装する。
-9. StoreKit課金と広告SDKの採否・実装を決める。
-10. App Store公開前にApple Developer Program、Bundle ID、Signing、App Store Connect、TestFlight、Privacy Nutrition Labelを整備する。
+1. App Store Connect API key を作成する。
+2. Apple Distribution certificate を作成し、`.p12` としてexportする。
+3. App Store provisioning profile for `com.pribye.app` を作成する。
+4. GitHub Actions secrets に以下を登録する。
+   - `APP_STORE_CONNECT_API_KEY_ID`
+   - `APP_STORE_CONNECT_ISSUER_ID`
+   - `APP_STORE_CONNECT_API_KEY_P8`
+   - `BUILD_CERTIFICATE_BASE64`
+   - `P12_PASSWORD`
+   - `BUILD_PROVISION_PROFILE_BASE64`
+   - `KEYCHAIN_PASSWORD`
+5. `workflow_dispatch` の TestFlight upload workflow を追加する。
+6. 初回archive/uploadを実行する。
+7. TestFlightで実機確認する。
+8. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
+9. Foundation Models実API接続を検証・実装する。
+10. StoreKit課金と広告SDKの採否・実装を決める。
 
-## 新規セッションへの指示例
-
-新しいチャットでは、まず以下のように依頼するとスムーズです。
+## 次チャットでの推奨依頼
 
 ```text
 HANDOFF.md を読んで、プリバイ開発の現在地を把握してください。
-次に GitHub Actions でビルドが通る状態にするため、project.yml とSwiftコードを点検し、必要なら修正してください。
-```
-
-または、Foundation Models接続から進めたい場合:
-
-```text
-HANDOFF.md を読んで、DocumentAnalyzer の設計を確認してください。
-FoundationModelsDocumentAnalyzer にiOS 26のFoundation Models APIを接続する実装方針を確認し、必要なコード変更をしてください。
+pushはまだしないでください。GitHub Actions無料枠を節約したいので、まずはローカルcommitまでで止めてください。
+次は TestFlight upload のため、App Store Connect API key / Distribution certificate / provisioning profile / GitHub Actions secrets の準備手順を具体的に案内してください。
 ```
 
 ## 注意
 
-このリポジトリには現在、元資料の `input` フォルダと `Agent.md` も未追跡ファイルとして存在しています。不要に削除しないでください。
-
-既存の設計思想では、細かい分類、優先度、場所、全文検索中心機能、クラウド同期、ユーザーアカウント、家族共有は意図的に対象外です。実装時に勝手に追加しないでください。
+- `main` にpushするとGitHub Actionsが走る。無料枠節約のため、pushはユーザー確認後に行う。
+- private repo の macOS Actions は無料枠を消費する。
+- ローカルcommitだけならActionsは走らない。
+- Macがない前提では、TestFlight upload はGitHub Actionsで行う想定。
+- `input` フォルダと `Agent.md` は元資料・補助資料として残す。不要に削除しない。
+- 細かい分類、優先度、場所、全文検索中心機能、クラウド同期、ユーザーアカウント、家族共有は現時点の設計対象外。勝手に追加しない。
