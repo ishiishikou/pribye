@@ -4,7 +4,7 @@
 - Apple Developer Program approval: done.
 - Team ID: `2QA6W85W3D`.
 - Bundle ID target: `com.pribye.app`.
-- Create an explicit App ID for `com.pribye.app` in Apple Developer.
+- Explicit App ID `com.pribye.app` in Apple Developer: done.
 - Enable only the capabilities the app actually uses.
 
 ## Xcode Project
@@ -15,7 +15,7 @@
 - CI build/test passes on GitHub Actions.
 
 ## App Store Connect
-- Create the app record after the Bundle ID exists.
+- Create the App Store Connect app record.
 - Set app name, SKU, primary category, age rating, and availability.
 - Prepare screenshots, description, keywords, support URL, and privacy policy URL.
 - Complete Privacy Nutrition Label for Photos, Camera, Calendar, advertising, and analytics.
