@@ -15,13 +15,15 @@
 - CI build/test passes on GitHub Actions.
 
 ## App Store Connect
-- Create the App Store Connect app record.
+- App Store Connect app record: done.
 - Set app name, SKU, primary category, age rating, and availability.
 - Prepare screenshots, description, keywords, support URL, and privacy policy URL.
 - Complete Privacy Nutrition Label for Photos, Camera, Calendar, advertising, and analytics.
 
 ## TestFlight
 - Archive and upload the first build.
+- Prepare distribution signing for CI or use Xcode Organizer on a Mac.
+- If using CI upload, create an App Store Connect API key and store signing assets in GitHub Actions secrets.
 - Verify camera capture, image review/correction, OCR, task extraction, task completion, calendar registration, and CSV export.
 - Verify permission prompts for Camera, Photos, and Calendar on a real device.
 
