@@ -213,6 +213,7 @@ CIを通すために以下を修正済み:
 - `DEVELOPMENT_TEAM` を `2QA6W85W3D` に設定。
 - TestFlight archive時に Apple Distribution 署名を明示。
 - App Store Connect upload検証に必要な `CFBundleIconName`、iPhone orientation、iPhone AppIconサイズ、iPhone対象設定を追加。
+- XcodeGenのresources指定を `Pribye/Resources` に変更し、`Assets.xcassets` がasset catalogとしてcompileされるように修正。
 - `altool` がupload失敗ログを出してもstep成功扱いになるケースを防ぐため、uploadログ内の失敗文字列を検出してworkflowを失敗させるように修正。
 
 ## 現在の重要な制約

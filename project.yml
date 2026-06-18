@@ -20,7 +20,9 @@ targets:
         excludes:
           - Resources/**
     resources:
-      - path: Pribye/Resources/Assets.xcassets
+      - path: Pribye/Resources
+        excludes:
+          - Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pribye.app
