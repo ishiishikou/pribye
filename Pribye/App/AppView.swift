@@ -46,8 +46,8 @@ extension View {
     }
   }
 
-  func withSheetDestinations(sheet: Binding<SheetDestination?>) -> some View {
-    sheet(item: sheet) { destination in
+  func withSheetDestinations(sheet destination: Binding<SheetDestination?>) -> some View {
+    self.sheet(item: destination) { destination in
       NavigationStack {
         switch destination {
         case .capture:
