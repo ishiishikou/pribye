@@ -2,19 +2,35 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>$(DEVELOPMENT_LANGUAGE)</string>
   <key>CFBundleDisplayName</key>
   <string>プリバイ</string>
-  <key>UILaunchScreen</key>
-  <dict/>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key>
+  <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>選択したタスクをカレンダーへ登録するために使用します。</string>
   <key>NSCameraUsageDescription</key>
   <string>プリントを撮影してタスク化するためにカメラを使用します。</string>
   <key>NSPhotoLibraryAddUsageDescription</key>
   <string>撮影した原本画像を写真ライブラリへ保存するために使用します。</string>
   <key>NSPhotoLibraryUsageDescription</key>
   <string>保存済みの原本画像を確認し、OCR根拠を表示するために使用します。</string>
-  <key>NSCalendarsFullAccessUsageDescription</key>
-  <string>選択したタスクをカレンダーへ登録するために使用します。</string>
-  <key>ITSAppUsesNonExemptEncryption</key>
-  <false/>
+  <key>UILaunchScreen</key>
+  <dict/>
 </dict>
 </plist>
