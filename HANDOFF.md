@@ -236,6 +236,7 @@ CIを通すために以下を修正済み:
 - App Store Connect upload検証に必要な `CFBundleIconName`、iPhone orientation、iPhone AppIconサイズ、iPhone対象設定を追加。
 - XcodeGenの `sources` 除外を `Resources/Info.plist` のみに変更し、`Assets.xcassets` がasset catalogとしてcompileされるように修正。
 - `altool` がupload失敗ログを出してもstep成功扱いになるケースを防ぐため、uploadログ内の失敗文字列を検出してworkflowを失敗させるように修正。
+- 実機クラッシュログ `Pribye-2026-06-19-192256.ips` で、補正後画像の写真ライブラリ保存時に `PHPhotoLibrary` の callback が `com.apple.PHPhotoLibrary.changes` queue から呼ばれ、`@MainActor` 隔離された closure が Swift 6 の actor isolation runtime check で `EXC_BREAKPOINT` になる問題を確認。`ImageAssetService` の Photos callback 処理を nonisolated helper に分離して修正。
 
 ## 現在の重要な制約
 
@@ -273,6 +274,7 @@ CIを通すために以下を修正済み:
 
 - OCR座標とハイライト画像の座標系を一致させるため、Documentに紐づけるPhotos assetは補正後画像です。
 - Photos保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
+- `PHPhotoLibrary` / `PHImageManager` の completion handler はMainActor上で直接定義しない。Swift 6のactor isolation runtime checkで実機クラッシュする可能性があるため、Photos callback は nonisolated helper に閉じ込める。
 - Windows環境では実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
 
 ### 広告・課金

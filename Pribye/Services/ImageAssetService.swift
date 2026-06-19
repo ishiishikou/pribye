@@ -35,7 +35,53 @@ struct ImageAssetService {
     }
 
     let hash = Self.hash(image: normalized)
-    let identifier = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+    let identifier = try await Self.createPhotoAsset(with: imageData)
+
+    return SavedImageAsset(localIdentifier: identifier, imageHash: hash)
+  }
+
+  func loadVerifiedImage(for document: DocumentRecord) async -> ImageAssetStateResult {
+    guard let identifier = document.photoAssetIdentifier else {
+      return ImageAssetStateResult(image: nil, state: .deleted)
+    }
+
+    let status = await requestPhotoReadAccess()
+    guard status == .authorized || status == .limited else {
+      return ImageAssetStateResult(image: nil, state: .permissionDenied)
+    }
+
+    do {
+      let imageData = try await Self.loadImageData(localIdentifier: identifier)
+      guard let image = UIImage(data: imageData)?.normalizedForProcessing() else {
+        return ImageAssetStateResult(image: nil, state: .permissionDenied)
+      }
+      if let storedHash = document.imageHash, Self.hash(image: image) != storedHash {
+        return ImageAssetStateResult(image: nil, state: .modified)
+      }
+      return ImageAssetStateResult(image: image, state: .available)
+    } catch {
+      return ImageAssetStateResult(image: nil, state: .permissionDenied)
+    }
+  }
+
+  private func requestPhotoWriteAccess() async -> PHAuthorizationStatus {
+    await Self.requestPhotoAuthorization(for: .addOnly)
+  }
+
+  private func requestPhotoReadAccess() async -> PHAuthorizationStatus {
+    await Self.requestPhotoAuthorization(for: .readWrite)
+  }
+
+  private nonisolated static func requestPhotoAuthorization(for accessLevel: PHAccessLevel) async -> PHAuthorizationStatus {
+    await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
+      PHPhotoLibrary.requestAuthorization(for: accessLevel) { status in
+        continuation.resume(returning: status)
+      }
+    }
+  }
+
+  private nonisolated static func createPhotoAsset(with imageData: Data) async throws -> String {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
       var placeholderIdentifier: String?
       PHPhotoLibrary.shared().performChanges {
         let request = PHAssetCreationRequest.forAsset()
@@ -51,54 +97,15 @@ struct ImageAssetService {
         }
       }
     }
-
-    return SavedImageAsset(localIdentifier: identifier, imageHash: hash)
   }
 
-  func loadVerifiedImage(for document: DocumentRecord) async -> ImageAssetStateResult {
-    guard let identifier = document.photoAssetIdentifier else {
-      return ImageAssetStateResult(image: nil, state: .deleted)
-    }
-
-    let status = await requestPhotoReadAccess()
-    guard status == .authorized || status == .limited else {
-      return ImageAssetStateResult(image: nil, state: .permissionDenied)
-    }
-
-    let assets = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+  private nonisolated static func loadImageData(localIdentifier: String) async throws -> Data {
+    let assets = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
     guard let asset = assets.firstObject else {
-      return ImageAssetStateResult(image: nil, state: .deleted)
+      throw ImageAssetError.assetNotFound
     }
 
-    do {
-      let image = try await loadImage(from: asset)
-      if let storedHash = document.imageHash, Self.hash(image: image) != storedHash {
-        return ImageAssetStateResult(image: nil, state: .modified)
-      }
-      return ImageAssetStateResult(image: image, state: .available)
-    } catch {
-      return ImageAssetStateResult(image: nil, state: .permissionDenied)
-    }
-  }
-
-  private func requestPhotoWriteAccess() async -> PHAuthorizationStatus {
-    await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
-      PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-        continuation.resume(returning: status)
-      }
-    }
-  }
-
-  private func requestPhotoReadAccess() async -> PHAuthorizationStatus {
-    await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
-      PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-        continuation.resume(returning: status)
-      }
-    }
-  }
-
-  private func loadImage(from asset: PHAsset) async throws -> UIImage {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UIImage, Error>) in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
       let options = PHImageRequestOptions()
       options.deliveryMode = .highQualityFormat
       options.isNetworkAccessAllowed = false
@@ -113,11 +120,11 @@ struct ImageAssetService {
           continuation.resume(throwing: error)
           return
         }
-        guard let data, let image = UIImage(data: data) else {
+        guard let data else {
           continuation.resume(throwing: ImageAssetError.imageLoadFailed)
           return
         }
-        continuation.resume(returning: image.normalizedForProcessing())
+        continuation.resume(returning: data)
       }
     }
   }
