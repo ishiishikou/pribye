@@ -91,7 +91,7 @@ private func fittedEvidenceImageRect(in container: CGSize, imageSize: CGSize) ->
     return CGRect(origin: .zero, size: container)
   }
 
-  let scale = min(container.width / imageSize.width, container.height / imageSize.height)
+  let scale = Swift.min(container.width / imageSize.width, container.height / imageSize.height)
   let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
   return CGRect(
     x: (container.width - size.width) / 2,

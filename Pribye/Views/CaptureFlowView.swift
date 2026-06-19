@@ -349,7 +349,7 @@ struct EditableCornerImage: View {
         }
       }
     }
-    .aspectRatio(image.size.width / max(image.size.height, 1), contentMode: .fit)
+    .aspectRatio(image.size.width / Swift.max(image.size.height, CGFloat(1)), contentMode: .fit)
   }
 }
 
@@ -386,7 +386,7 @@ private func fittedImageRect(in container: CGSize, imageSize: CGSize) -> CGRect 
     return CGRect(origin: .zero, size: container)
   }
 
-  let scale = min(container.width / imageSize.width, container.height / imageSize.height)
+  let scale = Swift.min(container.width / imageSize.width, container.height / imageSize.height)
   let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
   return CGRect(
     x: (container.width - size.width) / 2,
@@ -405,8 +405,8 @@ private func displayPoint(for normalizedPoint: CGPoint, in rect: CGRect) -> CGPo
 
 private func normalizedPoint(for displayPoint: CGPoint, in rect: CGRect) -> CGPoint {
   CGPoint(
-    x: ((displayPoint.x - rect.minX) / max(rect.width, 1)).clamped(to: 0...1),
-    y: ((displayPoint.y - rect.minY) / max(rect.height, 1)).clamped(to: 0...1)
+    x: ((displayPoint.x - rect.minX) / Swift.max(rect.width, CGFloat(1))).clamped(to: 0...1),
+    y: ((displayPoint.y - rect.minY) / Swift.max(rect.height, CGFloat(1))).clamped(to: 0...1)
   )
 }
 

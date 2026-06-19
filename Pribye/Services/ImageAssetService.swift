@@ -198,6 +198,6 @@ extension UIImage {
 
 extension CGFloat {
   func clamped(to range: ClosedRange<Self>) -> Self {
-    min(max(self, range.lowerBound), range.upperBound)
+    Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
   }
 }

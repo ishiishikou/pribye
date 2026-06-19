@@ -30,7 +30,7 @@ struct AdBannerPlaceholder: View {
     if !adsRemoved {
       #if canImport(GoogleMobileAds)
       GeometryReader { proxy in
-        let width = max(proxy.size.width, 320)
+        let width = Swift.max(proxy.size.width, CGFloat(320))
         let adSize = largeAnchoredAdaptiveBanner(width: width)
         AdMobBannerContainer(adSize: adSize)
           .frame(width: adSize.size.width, height: adSize.size.height)
