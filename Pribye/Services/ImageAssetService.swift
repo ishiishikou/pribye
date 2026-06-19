@@ -35,7 +35,7 @@ struct ImageAssetService {
     }
 
     let hash = Self.hash(image: normalized)
-    let identifier = try await withCheckedThrowingContinuation { continuation in
+    let identifier = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
       var placeholderIdentifier: String?
       PHPhotoLibrary.shared().performChanges {
         let request = PHAssetCreationRequest.forAsset()
@@ -82,7 +82,7 @@ struct ImageAssetService {
   }
 
   private func requestPhotoWriteAccess() async -> PHAuthorizationStatus {
-    await withCheckedContinuation { continuation in
+    await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
       PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
         continuation.resume(returning: status)
       }
@@ -90,7 +90,7 @@ struct ImageAssetService {
   }
 
   private func requestPhotoReadAccess() async -> PHAuthorizationStatus {
-    await withCheckedContinuation { continuation in
+    await withCheckedContinuation { (continuation: CheckedContinuation<PHAuthorizationStatus, Never>) in
       PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
         continuation.resume(returning: status)
       }
@@ -98,7 +98,7 @@ struct ImageAssetService {
   }
 
   private func loadImage(from asset: PHAsset) async throws -> UIImage {
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UIImage, Error>) in
       let options = PHImageRequestOptions()
       options.deliveryMode = .highQualityFormat
       options.isNetworkAccessAllowed = false
