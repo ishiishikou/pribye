@@ -19,6 +19,7 @@ struct TaskDetailView: View {
   @Bindable var task: ExtractedTaskRecord
   @State private var calendarMessage: String?
   @State private var isRegisteringCalendar = false
+  @State private var evidenceDocument: DocumentRecord?
   private let calendarService: CalendarServiceProtocol = EventKitCalendarService()
 
   var body: some View {
@@ -46,7 +47,9 @@ struct TaskDetailView: View {
             .foregroundStyle(.secondary)
         } else {
           Text(task.evidenceText)
-          Button("ハイライトを表示") {}
+          Button("ハイライトを表示") {
+            evidenceDocument = task.document
+          }
             .disabled(task.document?.sourceImageState != .available)
         }
       }
@@ -88,6 +91,11 @@ struct TaskDetailView: View {
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button("編集") {}
+      }
+    }
+    .sheet(item: $evidenceDocument) { document in
+      NavigationStack {
+        EvidenceHighlightView(document: document, task: task)
       }
     }
   }

@@ -10,7 +10,12 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: 2QA6W85W3D
-packages: {}
+    ADMOB_APP_ID: "ca-app-pub-3940256099942544~1458002511"
+    ADMOB_BANNER_AD_UNIT_ID: "ca-app-pub-3940256099942544/2435281174"
+packages:
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads.git
+    from: "13.5.0"
 targets:
   Pribye:
     type: application
@@ -26,6 +31,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - package: GoogleMobileAds
+        product: GoogleMobileAds
     scheme:
       testTargets:
         - PribyeTests

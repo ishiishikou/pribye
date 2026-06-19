@@ -1,3 +1,6 @@
+#if canImport(GoogleMobileAds)
+import GoogleMobileAds
+#endif
 import SwiftUI
 
 struct EmptyStateView: View {
@@ -25,6 +28,17 @@ struct AdBannerPlaceholder: View {
 
   var body: some View {
     if !adsRemoved {
+      #if canImport(GoogleMobileAds)
+      GeometryReader { proxy in
+        let width = max(proxy.size.width, 320)
+        let adSize = largeAnchoredAdaptiveBanner(width: width)
+        AdMobBannerContainer(adSize: adSize)
+          .frame(width: adSize.size.width, height: adSize.size.height)
+          .frame(maxWidth: .infinity)
+      }
+      .frame(height: 90)
+      .accessibilityIdentifier("ad_banner")
+      #else
       Text("広告エリア")
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -32,9 +46,37 @@ struct AdBannerPlaceholder: View {
         .frame(height: 64)
         .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityIdentifier("ad_banner")
+      #endif
     }
   }
 }
+
+#if canImport(GoogleMobileAds)
+private struct AdMobBannerContainer: UIViewRepresentable {
+  var adSize: AdSize
+
+  func makeUIView(context: Context) -> BannerView {
+    let banner = BannerView(adSize: adSize)
+    banner.adUnitID = AdMobConfiguration.bannerAdUnitID
+    banner.load(Request())
+    return banner
+  }
+
+  func updateUIView(_ banner: BannerView, context: Context) {
+    guard banner.adSize.size != adSize.size else {
+      return
+    }
+    banner.adSize = adSize
+    banner.load(Request())
+  }
+}
+
+private enum AdMobConfiguration {
+  static var bannerAdUnitID: String {
+    Bundle.main.object(forInfoDictionaryKey: "PribyeAdMobBannerAdUnitID") as? String ?? ""
+  }
+}
+#endif
 
 struct StatusPill: View {
   var text: String

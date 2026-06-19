@@ -18,7 +18,7 @@
 - App Store Connect app record: done.
 - Set app name, SKU, primary category, age rating, and availability.
 - Prepare screenshots, description, keywords, support URL, and privacy policy URL.
-- Complete Privacy Nutrition Label for Photos, Camera, Calendar, advertising, and analytics.
+- Complete Privacy Nutrition Label using `docs/APP_PRIVACY.md` as the current implementation memo.
 
 ## TestFlight
 - Archive and upload the first build.
@@ -26,8 +26,12 @@
 - If using CI upload, create an App Store Connect API key and store signing assets in GitHub Actions secrets.
 - Verify camera capture, image review/correction, OCR, task extraction, task completion, calendar registration, and CSV export.
 - Verify permission prompts for Camera, Photos, and Calendar on a real device.
+- Verify Foundation Models integration using `docs/FOUNDATION_MODELS_SETUP.md` before replacing the heuristic fallback.
 
 ## Privacy / Ads / Purchases
 - Do not send print images, OCR text, or extracted task content to external AI APIs.
+- Current build privacy declaration memo: `docs/APP_PRIVACY.md`.
 - If an ad SDK is added, keep print images, OCR text, task titles, and extracted content out of ad SDK payloads.
-- If paid ad removal is added, create StoreKit product IDs and test sandbox purchases.
+- StoreKit ad removal code uses `com.pribye.remove_ads`; create that product in App Store Connect using `docs/STOREKIT_SETUP.md` and test sandbox purchases.
+- AdMob integration uses Google test IDs by default; replace them using `docs/ADMOB_SETUP.md` before App Store submission.
+- Complete App Store privacy answers after reviewing Google Mobile Ads SDK data disclosure in `docs/APP_PRIVACY.md`.

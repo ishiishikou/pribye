@@ -7,6 +7,7 @@ struct SettingsView: View {
 
   @AppStorage("showReviewAfterAnalysis") private var showReviewAfterAnalysis = true
   @AppStorage("adsRemoved") private var adsRemoved = false
+  @StateObject private var purchaseService = PurchaseService()
 
   private var csvText: String {
     CSVExporter().export(documents: documents)
@@ -16,7 +17,43 @@ struct SettingsView: View {
     List {
       Section {
         Toggle("解析後に確認画面を開く", isOn: $showReviewAfterAnalysis)
-        Toggle("広告を非表示にする", isOn: $adsRemoved)
+      }
+
+      Section("広告") {
+        if adsRemoved {
+          Label("広告は非表示です", systemImage: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+        } else {
+          Button {
+            Task {
+              if await purchaseService.purchaseRemoveAds() {
+                adsRemoved = true
+              }
+            }
+          } label: {
+            if purchaseService.isLoading {
+              ProgressView()
+            } else {
+              Label(removeAdsButtonTitle, systemImage: "cart")
+            }
+          }
+          .disabled(purchaseService.isLoading)
+
+          Button {
+            Task {
+              adsRemoved = await purchaseService.restoreRemoveAds()
+            }
+          } label: {
+            Label("購入を復元", systemImage: "arrow.clockwise")
+          }
+          .disabled(purchaseService.isLoading)
+        }
+
+        if let statusMessage = purchaseService.statusMessage {
+          Text(statusMessage)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
       }
 
       Section {
@@ -47,5 +84,19 @@ struct SettingsView: View {
       }
     }
     .navigationTitle("設定")
+    .task {
+      await purchaseService.loadRemoveAdsProduct()
+      adsRemoved = await purchaseService.refreshEntitlement()
+      for await isRemoved in purchaseService.updatedRemoveAdsEntitlements() {
+        adsRemoved = isRemoved
+      }
+    }
+  }
+
+  private var removeAdsButtonTitle: String {
+    if let product = purchaseService.removeAdsProduct {
+      return "広告を非表示にする（\(product.displayPrice)）"
+    }
+    return "広告を非表示にする"
   }
 }

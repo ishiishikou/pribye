@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 struct OCRPageSnapshot: Equatable, Sendable {
   var pageIndex: Int
@@ -37,9 +40,15 @@ protocol DocumentAnalyzer: Sendable {
 
 struct AppleIntelligenceAvailability: Sendable {
   var isSupported: Bool {
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      return SystemLanguageModel.default.isAvailable
+    }
+    #else
     if #available(iOS 26.0, *) {
       return true
     }
+    #endif
     return false
   }
 }
@@ -57,15 +66,150 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
   }
 
   func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
-    guard availability.isSupported else {
-      throw DocumentAnalyzerError.unsupportedDevice
+    #if canImport(FoundationModels)
+    if #available(iOS 26.0, *), availability.isSupported {
+      return try await analyzeWithFoundationModels(pages: pages)
     }
-
-    // Foundation Models API calls belong here. The heuristic parser keeps the
-    // app usable in CI and until Apple Intelligence is validated on-device.
+    #endif
     return try await fallback.analyze(pages: pages)
   }
+
+  #if canImport(FoundationModels)
+  @available(iOS 26.0, *)
+  private func analyzeWithFoundationModels(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
+    let session = LanguageModelSession(
+      model: .default,
+      instructions: """
+      あなたは学校・幼稚園などの配布プリントから、ユーザーが行動すべき最小限のタスクだけを抽出します。
+      外部知識で補完せず、OCR入力に含まれる内容だけを使ってください。
+      分類、場所、優先度、全文要約は作らないでください。
+      日付は分かる場合だけ yyyy-MM-dd で返してください。
+      根拠はOCR行の text をそのまま短く返し、対応する observation ID を必ず選んでください。
+      """
+    )
+
+    let response = try await session.respond(
+      to: makeFoundationModelPrompt(pages: pages),
+      generating: FoundationModelAnalysisOutput.self,
+      includeSchemaInPrompt: true
+    )
+
+    return try response.content.analysisResult()
+  }
+
+  private func makeFoundationModelPrompt(pages: [OCRPageSnapshot]) -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "yyyy-MM-dd"
+    let today = formatter.string(from: .now)
+    let pageText = pages
+      .map { page in
+        let observations = page.observations
+          .map { "- id: \($0.id.uuidString)\n  text: \($0.text)" }
+          .joined(separator: "\n")
+        return "Page \(page.pageIndex + 1):\n\(observations)"
+      }
+      .joined(separator: "\n\n")
+
+    return """
+    今日の日付: \(today)
+
+    次のOCR行から、提出、持参、申込、準備、検温、支払い、参加など、ユーザーが行動すべきタスクだけを抽出してください。
+
+    期間がある場合:
+    - dueStart に開始日
+    - dueEnd に終了日
+
+    期限だけの場合:
+    - dueEnd に期限日
+    - dueStart は空
+
+    日付が年なしの場合は、今日の日付を基準に最も自然な年を補ってください。
+    行動ではない見出し、説明文、挨拶、問い合わせ先はタスクにしないでください。
+
+    OCR:
+    \(pageText)
+    """
+  }
+  #endif
 }
+
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+@Generable(description: "A minimal task extraction result from a printed school notice")
+private struct FoundationModelAnalysisOutput {
+  @Guide(description: "A short title for the printed document in Japanese")
+  var documentTitle: String
+
+  @Guide(description: "Only actionable tasks found in the OCR text")
+  var tasks: [FoundationModelTaskOutput]
+
+  func analysisResult() throws -> AnalysisResult {
+    let convertedTasks = tasks.compactMap { task -> TaskDraft? in
+      let title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !title.isEmpty else {
+        return nil
+      }
+
+      return TaskDraft(
+        title: title,
+        note: task.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+        dueStart: Self.parseDate(task.dueStart),
+        dueEnd: Self.parseDate(task.dueEnd),
+        evidenceText: task.evidenceText.trimmingCharacters(in: .whitespacesAndNewlines),
+        evidenceObservationID: task.evidenceObservationID.flatMap(UUID.init(uuidString:))
+      )
+    }
+
+    guard !convertedTasks.isEmpty else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
+
+    let title = documentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    return AnalysisResult(
+      documentTitle: title.isEmpty ? "プリント" : title,
+      tasks: convertedTasks
+    )
+  }
+
+  private static func parseDate(_ value: String?) -> Date? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+      return nil
+    }
+
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.date(from: value)
+  }
+}
+
+@available(iOS 26.0, *)
+@Generable(description: "One actionable task extracted from OCR text")
+private struct FoundationModelTaskOutput {
+  @Guide(description: "A concise task title in Japanese")
+  var title: String
+
+  @Guide(description: "A short optional note. Leave empty unless it is needed to act.")
+  var note: String?
+
+  @Guide(description: "Start date for a period task as yyyy-MM-dd. Leave empty when not applicable.")
+  var dueStart: String?
+
+  @Guide(description: "Deadline or end date as yyyy-MM-dd. Leave empty when not applicable.")
+  var dueEnd: String?
+
+  @Guide(description: "The exact OCR text that supports this task")
+  var evidenceText: String
+
+  @Guide(description: "The UUID string of the OCR observation that supports this task")
+  var evidenceObservationID: String?
+}
+#endif
 
 struct HeuristicDocumentAnalyzer: DocumentAnalyzer {
   var dateParser: DateRangeParser = DateRangeParser()

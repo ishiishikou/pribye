@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import SwiftData
 
@@ -153,6 +154,21 @@ final class PageRecord {
     self.cropBottomLeftX = 0
     self.cropBottomLeftY = 1
     self.observations = []
+  }
+
+  func setCropCorners(_ corners: [CGPoint]) {
+    guard corners.count == 4 else {
+      return
+    }
+
+    cropTopLeftX = Double(corners[0].x)
+    cropTopLeftY = Double(corners[0].y)
+    cropTopRightX = Double(corners[1].x)
+    cropTopRightY = Double(corners[1].y)
+    cropBottomRightX = Double(corners[2].x)
+    cropBottomRightY = Double(corners[2].y)
+    cropBottomLeftX = Double(corners[3].x)
+    cropBottomLeftY = Double(corners[3].y)
   }
 }
 

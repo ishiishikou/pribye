@@ -84,6 +84,10 @@ GitHub Actions:
 関連ドキュメント:
 
 - `docs/APP_STORE_CHECKLIST.md`
+- `docs/ADMOB_SETUP.md`
+- `docs/APP_PRIVACY.md`
+- `docs/FOUNDATION_MODELS_SETUP.md`
+- `docs/STOREKIT_SETUP.md`
 - `docs/TESTFLIGHT_UPLOAD.md`
 
 ## 実装済み
@@ -94,6 +98,8 @@ GitHub Actions:
   - XcodeGen用設定
   - iOS 26.0 deployment target
   - iPhone向け設定（`TARGETED_DEVICE_FAMILY: "1"`）
+  - Google Mobile Ads SDK（AdMob）SPM dependency
+  - AdMob test App ID / banner ad unit build settings
   - `Pribye` app target
   - `PribyeTests` unit test target
 - `.github/workflows/ios.yml`
@@ -122,11 +128,15 @@ GitHub Actions:
 - `Pribye/Services/OCRService.swift`
 - `Pribye/Services/CalendarService.swift`
 - `Pribye/Services/CSVExporter.swift`
+- `Pribye/Services/ImageAssetService.swift`
+- `Pribye/Services/PurchaseService.swift`
 - `Pribye/Services/SampleDataFactory.swift`
 - `Pribye/Views/TaskListView.swift`
 - `Pribye/Views/PrintListView.swift`
 - `Pribye/Views/DetailViews.swift`
 - `Pribye/Views/CaptureFlowView.swift`
+- `Pribye/Views/CameraImagePicker.swift`
+- `Pribye/Views/EvidenceHighlightView.swift`
 - `Pribye/Views/ManualTaskView.swift`
 - `Pribye/Views/SettingsView.swift`
 - `Pribye/Views/Components.swift`
@@ -157,12 +167,13 @@ GitHub Actions:
 - 撮影/補正/解析/結果確認フロー
 - 手動タスク追加
 - 設定
+- タスク詳細からの根拠ハイライト表示
 
 UI方針:
 
 - `TabView` は `タスク / プリント / 設定`
 - 撮影はシートで表示
-- 広告は一覧画面下部のプレースホルダーのみ
+- 広告は一覧画面下部のAdMob bannerのみ。SDK未解決時だけプレースホルダーにフォールバック
 - 撮影、補正、確認、詳細画面には広告を表示しない
 - 解析後の確認画面は設定でON/OFF可能
 
@@ -175,8 +186,8 @@ UI方針:
 - `DocumentAnalyzer`
   - AI抽出境界
 - `FoundationModelsDocumentAnalyzer`
-  - Foundation Models用アダプタ予定
-  - 現在は `HeuristicDocumentAnalyzer` へフォールバック
+  - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
+  - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は `HeuristicDocumentAnalyzer` へフォールバック
 - `HeuristicDocumentAnalyzer`
   - OCRテキストから期限/期間と行動らしい文を簡易抽出
 - `DateRangeParser`
@@ -185,6 +196,15 @@ UI方針:
   - ユーザー操作によるカレンダー登録
 - `CSVExporter`
   - 設定画面からCSV共有
+- `ImageAssetService`
+  - 補正後画像の写真ライブラリ保存
+  - Photos asset ID と画像ハッシュ保存
+  - 元画像削除、写真アクセス拒否、画像変更検知
+- `ImageProcessingService`
+  - 四隅座標からCore Imageのperspective correctionを実行
+- `PurchaseService`
+  - StoreKit 2で広告非表示課金 `com.pribye.remove_ads` の読み込み、購入、復元
+  - StoreKit transaction updates を監視し、購入状態を `adsRemoved` に反映
 
 ### テスト
 
@@ -200,6 +220,7 @@ UI方針:
 - ヒューリスティックAI抽出
 - タスク完了状態とライフサイクル
 - Document状態表示
+- 四隅補正座標の保存
 
 ## 直近で解決した問題
 
@@ -220,46 +241,67 @@ CIを通すために以下を修正済み:
 
 ### Foundation Models
 
-`FoundationModelsDocumentAnalyzer` はまだ実API接続していません。
+`FoundationModelsDocumentAnalyzer` は条件付きで実API接続済みです。
 
-理由:
+実装:
 
-- iOS 26 SDKとApple Intelligence対応実機での検証が必要。
-- CI上でも扱える状態を優先し、現時点ではヒューリスティック抽出へフォールバックしている。
+- `canImport(FoundationModels)` の環境では `LanguageModelSession.respond(to:generating:includeSchemaInPrompt:options:)` を使用。
+- 出力は `@Generable` DTOで受け、既存の `AnalysisResult` / `TaskDraft` に変換。
+- Foundation Models が利用不可の場合は、CIと非対応端末で動くよう `HeuristicDocumentAnalyzer` にフォールバック。
 
-次の実装者は、Foundation Models公式APIを確認し、`FoundationModelsDocumentAnalyzer.analyze(pages:)` の内部だけを差し替えるのがよいです。
+注意:
+
+- Windows環境では `FoundationModels` framework のコンパイル確認とApple Intelligence対応実機検証はできていません。
+- 実機確認手順は `docs/FOUNDATION_MODELS_SETUP.md` に記載済み。
 
 ### カメラ・四隅補正
 
-現在の撮影フローは `PhotosPicker` とデモデータ中心です。
-
-未実装:
-
-- 実機カメラ撮影
-- 写真ライブラリへの原本保存
-- `assetIdentifier` 保存
-- 画像ハッシュ生成と変更検知
-- 実際の四隅ドラッグ操作
-- 四隅補正後の画像変換
-
-UIとして補正画面の骨格はありますが、実補正処理はまだです。
-
-### 広告・課金
-
-広告と課金はプレースホルダーです。
+現在の撮影フローは、実機カメラ撮影、`PhotosPicker`、デモデータ追加に対応しています。
 
 実装済み:
 
-- 一覧画面下部の広告プレースホルダー
-- 設定画面の「広告を非表示にする」トグル
+- `UIImagePickerController` による実機カメラ撮影
+- 四隅ドラッグ操作
+- 選択中頂点の拡大確認
+- Core Image `CIPerspectiveCorrection` による補正後画像生成
+- 補正後画像の写真ライブラリ保存
+- Photos asset ID 保存
+- 画像ハッシュ生成と、削除/権限拒否/変更検知
+- タスク詳細からのOCR根拠ハイライト表示
+
+注意:
+
+- OCR座標とハイライト画像の座標系を一致させるため、Documentに紐づけるPhotos assetは補正後画像です。
+- Photos保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
+- Windows環境では実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
+
+### 広告・課金
+
+広告表示はGoogle Mobile Ads SDK（AdMob）、課金はStoreKit 2のアプリ内コードを実装済みです。
+
+実装済み:
+
+- 一覧画面下部のAdMob anchored adaptive banner
+- SDK未解決環境での広告プレースホルダーフォールバック
+- Google公式テスト App ID / banner ad unit ID
+- `GADApplicationIdentifier`
+- Google公式quick startから抽出した `SKAdNetworkItems`
+- 設定画面の広告非表示購入/復元UI
+- StoreKit product ID: `com.pribye.remove_ads`
+- 購入または復元済み entitlement がある場合、`adsRemoved` を有効化して広告プレースホルダーを非表示
 
 未実装:
 
-- 広告SDK
-- StoreKit課金
-- App Store用のプライバシー申告内容確定
+- AdMob本番 App ID / banner ad unit ID への差し替え
+- App Store Connect上のアプリ内課金商品 `com.pribye.remove_ads` 作成
 
-広告SDKを入れる場合も、プリント画像、OCR、タスク名、抽出内容を広告SDKへ渡さない方針を守る必要があります。
+AdMob設定手順は `docs/ADMOB_SETUP.md` に作成済み。
+
+App Store用のプライバシー申告メモは `docs/APP_PRIVACY.md` に作成済み。AdMob採用後は `Data Not Collected` のまま提出できないため、Google Mobile Ads SDK のdata disclosureを確認してApp Store Connect申告を更新する必要があります。
+
+App Store Connect上のアプリ内課金商品作成手順は `docs/STOREKIT_SETUP.md` に作成済み。
+
+AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出内容を渡さない方針を守る必要があります。
 
 ## 次にやること
 
@@ -267,10 +309,11 @@ UIとして補正画面の骨格はありますが、実補正処理はまだで
 
 1. ユーザー承認後にpushする。pushすると既存の `.github/workflows/ios.yml` が走り、macOS Actions無料枠を消費する。
 2. `TestFlight Upload` workflowを手動実行し、App Store Connect uploadまで成功するか確認する。
-3. TestFlightで実機確認する。
-4. 実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを実装する。
-5. Foundation Models実API接続を検証・実装する。
-6. StoreKit課金と広告SDKの採否・実装を決める。
+3. TestFlightで実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを確認する。
+4. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Models実API接続をXcode 26 / 対応実機で検証する。
+5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
+6. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
+7. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
 
 ## 次チャットでの推奨依頼
 

@@ -19,10 +19,14 @@ struct CaptureFlowView: View {
   @State private var step: CaptureStep = .input
   @State private var selectedItem: PhotosPickerItem?
   @State private var selectedImage: UIImage?
+  @State private var cropCorners = CropPreview.defaultCorners
+  @State private var isShowingCamera = false
   @State private var createdDocument: DocumentRecord?
 
   private let ocrService: OCRServiceProtocol = VisionOCRService()
   private let analyzer: DocumentAnalyzer = FoundationModelsDocumentAnalyzer()
+  private let imageAssetService = ImageAssetService()
+  private let imageProcessingService = ImageProcessingService()
 
   var body: some View {
     Group {
@@ -55,6 +59,18 @@ struct CaptureFlowView: View {
     .onChange(of: selectedItem) { _, newValue in
       Task { await load(item: newValue) }
     }
+    .fullScreenCover(isPresented: $isShowingCamera) {
+      CameraImagePicker { image in
+        selectedImage = image
+        selectedItem = nil
+        cropCorners = CropPreview.defaultCorners
+        step = .correction
+        isShowingCamera = false
+      } onCancel: {
+        isShowingCamera = false
+      }
+      .ignoresSafeArea()
+    }
   }
 
   private var inputView: some View {
@@ -66,11 +82,23 @@ struct CaptureFlowView: View {
       Text("プリントを取り込む")
         .font(.title2.weight(.bold))
 
+      Button {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+          isShowingCamera = true
+        } else {
+          step = .failed("この端末ではカメラを利用できません")
+        }
+      } label: {
+        Label("カメラで撮影", systemImage: "camera")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+
       PhotosPicker(selection: $selectedItem, matching: .images) {
         Label("写真から選ぶ", systemImage: "photo.on.rectangle")
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.bordered)
 
       Button {
         SampleDataFactory.insertDemoDocument(into: modelContext)
@@ -81,7 +109,7 @@ struct CaptureFlowView: View {
       }
       .buttonStyle(.bordered)
 
-      Text("実機ではカメラ撮影からこの補正フローへ接続します。写真・OCR・AI結果は外部AI APIへ送信しません。")
+      Text("写真・OCR・AI結果は外部AI APIへ送信しません。補正後の画像は写真ライブラリに保存します。")
         .font(.footnote)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -92,7 +120,7 @@ struct CaptureFlowView: View {
   private var correctionView: some View {
     VStack(spacing: 16) {
       if let selectedImage {
-        CropPreview(image: selectedImage)
+        CropPreview(image: selectedImage, corners: $cropCorners)
           .frame(maxHeight: 520)
       }
 
@@ -150,6 +178,7 @@ struct CaptureFlowView: View {
     .padding()
   }
 
+  @MainActor
   private func load(item: PhotosPickerItem?) async {
     guard let item else {
       return
@@ -158,7 +187,9 @@ struct CaptureFlowView: View {
       step = .failed("画像を読み込めませんでした")
       return
     }
-    selectedImage = image
+    let normalized = image.normalizedForProcessing()
+    selectedImage = normalized
+    cropCorners = CropPreview.defaultCorners
     step = .correction
   }
 
@@ -170,14 +201,30 @@ struct CaptureFlowView: View {
     }
 
     step = .analyzing
+    let originalImage = selectedImage.normalizedForProcessing()
+    let correctedImage: UIImage
+    do {
+      correctedImage = try imageProcessingService.correctPerspective(image: originalImage, corners: cropCorners)
+    } catch {
+      step = .failed("画像補正に失敗しました")
+      return
+    }
+
     let document = DocumentRecord(status: .ocrProcessing)
-    document.thumbnailData = selectedImage.jpegData(compressionQuality: 0.45)
+    document.thumbnailData = correctedImage.jpegData(compressionQuality: 0.45)
     modelContext.insert(document)
     createdDocument = document
 
     do {
-      let ocr = try await ocrService.recognizeText(in: selectedImage)
+      let savedAsset = try await imageAssetService.saveImage(correctedImage)
+      document.photoAssetIdentifier = savedAsset.localIdentifier
+      document.imageHash = savedAsset.imageHash
+
+      let ocr = try await ocrService.recognizeText(in: correctedImage)
       let page = PageRecord(pageIndex: 0, ocrText: ocr.text)
+      page.photoAssetIdentifier = document.photoAssetIdentifier
+      page.imageHash = document.imageHash
+      page.setCropCorners(cropCorners)
       page.observations = ocr.observations.map {
         OCRObservationRecord(
           text: $0.text,
@@ -223,6 +270,10 @@ struct CaptureFlowView: View {
       document.status = .failed
       document.failureReason = .extractionError
       step = .failed("プリントの内容が確認しにくい可能性があります")
+    } catch ImageAssetError.photoAccessDenied {
+      document.status = .failed
+      document.failureReason = .imageError
+      step = .failed("補正後の画像を写真ライブラリへ保存できませんでした")
     } catch {
       document.status = .failed
       document.failureReason = .unknownError
@@ -232,42 +283,131 @@ struct CaptureFlowView: View {
 }
 
 struct CropPreview: View {
+  static let defaultCorners = [
+    CGPoint(x: 0.06, y: 0.06),
+    CGPoint(x: 0.94, y: 0.06),
+    CGPoint(x: 0.94, y: 0.94),
+    CGPoint(x: 0.06, y: 0.94)
+  ]
+
   var image: UIImage
+  @Binding var corners: [CGPoint]
+  @State private var selectedCornerIndex = 0
 
   var body: some View {
     VStack(spacing: 12) {
-      Image(uiImage: image)
-        .resizable()
-        .scaledToFit()
-        .overlay {
-          GeometryReader { proxy in
-            let points = [
-              CGPoint(x: 18, y: 18),
-              CGPoint(x: proxy.size.width - 18, y: 18),
-              CGPoint(x: proxy.size.width - 18, y: proxy.size.height - 18),
-              CGPoint(x: 18, y: proxy.size.height - 18)
-            ]
-            Path { path in
-              path.addLines(points)
-              path.closeSubpath()
-            }
-            .stroke(.blue, lineWidth: 2)
-
-            ForEach(points.indices, id: \.self) { index in
-              Circle()
-                .fill(.blue)
-                .frame(width: 14, height: 14)
-                .position(points[index])
-            }
-          }
-        }
+      MagnifiedCornerView(image: image, corner: corners[selectedCornerIndex])
+        .frame(height: 128)
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
-      Text("上部で角を確認し、必要なら撮り直してください。初版では自動補正結果を保存します。")
+      EditableCornerImage(image: image, corners: $corners, selectedCornerIndex: $selectedCornerIndex)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+      Text("四隅を合わせてから解析へ進みます。上部で選択中の角を拡大確認できます。")
         .font(.footnote)
         .foregroundStyle(.secondary)
     }
   }
+}
+
+struct EditableCornerImage: View {
+  var image: UIImage
+  @Binding var corners: [CGPoint]
+  @Binding var selectedCornerIndex: Int
+
+  var body: some View {
+    GeometryReader { proxy in
+      let imageRect = fittedImageRect(in: proxy.size, imageSize: image.size)
+
+      ZStack {
+        Image(uiImage: image)
+          .resizable()
+          .scaledToFit()
+          .frame(width: proxy.size.width, height: proxy.size.height)
+
+        Path { path in
+          let displayPoints = corners.map { displayPoint(for: $0, in: imageRect) }
+          path.addLines(displayPoints)
+          path.closeSubpath()
+        }
+        .stroke(.blue, lineWidth: 2)
+
+        ForEach(corners.indices, id: \.self) { index in
+          let point = displayPoint(for: corners[index], in: imageRect)
+          Circle()
+            .fill(index == selectedCornerIndex ? .orange : .blue)
+            .frame(width: 24, height: 24)
+            .overlay(Circle().stroke(.white, lineWidth: 3))
+            .position(point)
+            .gesture(
+              DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                  selectedCornerIndex = index
+                  corners[index] = normalizedPoint(for: value.location, in: imageRect)
+                }
+            )
+        }
+      }
+    }
+    .aspectRatio(image.size.width / max(image.size.height, 1), contentMode: .fit)
+  }
+}
+
+struct MagnifiedCornerView: View {
+  var image: UIImage
+  var corner: CGPoint
+
+  var body: some View {
+    GeometryReader { proxy in
+      let imageRect = fittedImageRect(in: proxy.size, imageSize: image.size)
+      let displayCorner = displayPoint(for: corner, in: imageRect)
+
+      ZStack {
+        Image(uiImage: image)
+          .resizable()
+          .scaledToFit()
+          .scaleEffect(2.6, anchor: UnitPoint(x: corner.x, y: corner.y))
+          .frame(width: proxy.size.width, height: proxy.size.height)
+          .clipped()
+          .overlay {
+            Circle()
+              .stroke(.orange, lineWidth: 2)
+              .frame(width: 30, height: 30)
+              .position(displayCorner)
+          }
+      }
+      .background(.secondary.opacity(0.08))
+    }
+  }
+}
+
+private func fittedImageRect(in container: CGSize, imageSize: CGSize) -> CGRect {
+  guard imageSize.width > 0, imageSize.height > 0, container.width > 0, container.height > 0 else {
+    return CGRect(origin: .zero, size: container)
+  }
+
+  let scale = min(container.width / imageSize.width, container.height / imageSize.height)
+  let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+  return CGRect(
+    x: (container.width - size.width) / 2,
+    y: (container.height - size.height) / 2,
+    width: size.width,
+    height: size.height
+  )
+}
+
+private func displayPoint(for normalizedPoint: CGPoint, in rect: CGRect) -> CGPoint {
+  CGPoint(
+    x: rect.minX + normalizedPoint.x.clamped(to: 0...1) * rect.width,
+    y: rect.minY + normalizedPoint.y.clamped(to: 0...1) * rect.height
+  )
+}
+
+private func normalizedPoint(for displayPoint: CGPoint, in rect: CGRect) -> CGPoint {
+  CGPoint(
+    x: ((displayPoint.x - rect.minX) / max(rect.width, 1)).clamped(to: 0...1),
+    y: ((displayPoint.y - rect.minY) / max(rect.height, 1)).clamped(to: 0...1)
+  )
 }
 
 struct AnalysisReviewView: View {

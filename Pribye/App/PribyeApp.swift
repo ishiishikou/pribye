@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(GoogleMobileAds)
+import GoogleMobileAds
+#endif
 import SwiftData
 import SwiftUI
 
@@ -9,6 +12,9 @@ struct PribyeApp: App {
       at: URL.applicationSupportDirectory,
       withIntermediateDirectories: true
     )
+    #if canImport(GoogleMobileAds)
+    MobileAds.shared.start()
+    #endif
   }
 
   var body: some Scene {
