@@ -70,6 +70,7 @@ final class DocumentRecord {
   var lifecycleRaw: String
   var failureReasonRaw: String?
   var photoAssetIdentifier: String?
+  var localImageFilename: String?
   var imageHash: String?
   var sourceImageStateRaw: String
   var thumbnailData: Data?
@@ -128,6 +129,7 @@ final class PageRecord {
   @Attribute(.unique) var id: UUID
   var pageIndex: Int
   var photoAssetIdentifier: String?
+  var localImageFilename: String?
   var imageHash: String?
   var cropTopLeftX: Double
   var cropTopLeftY: Double

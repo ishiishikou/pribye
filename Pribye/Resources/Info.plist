@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key>
-  <string>$(DEVELOPMENT_LANGUAGE)</string>
+  <string>ja</string>
   <key>CFBundleDisplayName</key>
   <string>プリバイ</string>
   <key>CFBundleExecutable</key>
@@ -16,6 +16,10 @@
   <string>6.0</string>
   <key>CFBundleName</key>
   <string>$(PRODUCT_NAME)</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>ja</string>
+  </array>
   <key>CFBundlePackageType</key>
   <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
   <key>CFBundleShortVersionString</key>
@@ -31,7 +35,7 @@
   <key>NSCameraUsageDescription</key>
   <string>プリントを撮影してタスク化するためにカメラを使用します。</string>
   <key>NSPhotoLibraryAddUsageDescription</key>
-  <string>補正後のプリント画像を写真ライブラリへ保存するために使用します。</string>
+  <string>カメラや書類スキャンで取り込んだプリント画像を保存するために使用します。</string>
   <key>NSPhotoLibraryUsageDescription</key>
   <string>保存済みの補正後画像を確認し、OCR根拠を表示するために使用します。</string>
   <key>PribyeAdMobBannerAdUnitID</key>

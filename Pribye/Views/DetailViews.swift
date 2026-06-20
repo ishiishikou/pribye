@@ -191,33 +191,12 @@ struct DocumentDetailView: View {
               Text("ページ\(page.pageIndex + 1)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-              if let correctedOCRText = page.correctedOCRText, correctedOCRText != page.ocrText {
-                Text("AI補正後")
-                  .font(.caption2.weight(.semibold))
-                  .foregroundStyle(.secondary)
-                Text(correctedOCRText)
-                  .font(.callout)
-                Text("元のOCR")
-                  .font(.caption2.weight(.semibold))
-                  .foregroundStyle(.secondary)
-              }
               Text(page.ocrText)
                 .font(.callout)
             }
             .padding(.vertical, 4)
           }
         } else {
-          if let correctedOCRText = document.correctedOCRText, correctedOCRText != document.ocrText {
-            Text("AI補正後")
-              .font(.caption.weight(.semibold))
-              .foregroundStyle(.secondary)
-            Text(correctedOCRText)
-              .font(.callout)
-            Text("元のOCR")
-              .font(.caption.weight(.semibold))
-              .foregroundStyle(.secondary)
-              .padding(.top, 4)
-          }
           Text(document.ocrText)
             .font(.callout)
         }

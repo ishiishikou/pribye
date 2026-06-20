@@ -16,6 +16,11 @@ struct SavedImageAsset: Sendable {
   var imageHash: String
 }
 
+struct SavedLocalImageFile: Sendable {
+  var filename: String
+  var imageHash: String
+}
+
 struct ImageAssetStateResult {
   var image: UIImage?
   var state: SourceImageState
@@ -40,12 +45,39 @@ struct ImageAssetService {
     return SavedImageAsset(localIdentifier: identifier, imageHash: hash)
   }
 
+  func saveImageLocally(_ image: UIImage) throws -> SavedLocalImageFile {
+    let normalized = image.normalizedForProcessing()
+    guard let imageData = normalized.pngData() else {
+      throw ImageAssetError.imageLoadFailed
+    }
+
+    let filename = "\(UUID().uuidString).png"
+    do {
+      let directory = try Self.localImageDirectory()
+      let fileURL = directory.appendingPathComponent(filename, isDirectory: false)
+      try imageData.write(to: fileURL, options: .atomic)
+    } catch {
+      throw ImageAssetError.imageLoadFailed
+    }
+
+    return SavedLocalImageFile(
+      filename: filename,
+      imageHash: Self.hash(image: normalized)
+    )
+  }
+
   func loadVerifiedImage(for document: DocumentRecord) async -> ImageAssetStateResult {
-    await loadVerifiedImage(identifier: document.photoAssetIdentifier, imageHash: document.imageHash)
+    if let localImageFilename = document.localImageFilename {
+      return loadVerifiedLocalImage(filename: localImageFilename, imageHash: document.imageHash)
+    }
+    return await loadVerifiedImage(identifier: document.photoAssetIdentifier, imageHash: document.imageHash)
   }
 
   func loadVerifiedImage(for page: PageRecord) async -> ImageAssetStateResult {
-    await loadVerifiedImage(identifier: page.photoAssetIdentifier, imageHash: page.imageHash)
+    if let localImageFilename = page.localImageFilename {
+      return loadVerifiedLocalImage(filename: localImageFilename, imageHash: page.imageHash)
+    }
+    return await loadVerifiedImage(identifier: page.photoAssetIdentifier, imageHash: page.imageHash)
   }
 
   private func loadVerifiedImage(identifier: String?, imageHash: String?) async -> ImageAssetStateResult {
@@ -69,6 +101,25 @@ struct ImageAssetService {
       return ImageAssetStateResult(image: image, state: .available)
     } catch {
       return ImageAssetStateResult(image: nil, state: .permissionDenied)
+    }
+  }
+
+  private func loadVerifiedLocalImage(filename: String, imageHash: String?) -> ImageAssetStateResult {
+    do {
+      let fileURL = try Self.localImageDirectory().appendingPathComponent(filename, isDirectory: false)
+      guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        return ImageAssetStateResult(image: nil, state: .deleted)
+      }
+      let imageData = try Data(contentsOf: fileURL)
+      guard let image = UIImage(data: imageData)?.normalizedForProcessing() else {
+        return ImageAssetStateResult(image: nil, state: .deleted)
+      }
+      if let storedHash = imageHash, Self.hash(image: image) != storedHash {
+        return ImageAssetStateResult(image: nil, state: .modified)
+      }
+      return ImageAssetStateResult(image: image, state: .available)
+    } catch {
+      return ImageAssetStateResult(image: nil, state: .deleted)
     }
   }
 
@@ -135,6 +186,18 @@ struct ImageAssetService {
         continuation.resume(returning: data)
       }
     }
+  }
+
+  private nonisolated static func localImageDirectory() throws -> URL {
+    let applicationSupportDirectory = try FileManager.default.url(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true
+    )
+    let directory = applicationSupportDirectory.appendingPathComponent("ProcessedImages", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
   }
 
   private final class PhotoAssetCreationState: @unchecked Sendable {

@@ -6,7 +6,8 @@
 
 - プリント画像、補正後画像、OCR全文、OCR座標、抽出タスク、CSVデータは外部サーバーへ送信しない。
 - OCRとタスク抽出は端末内処理を前提にする。
-- 補正後画像はユーザー端末の写真ライブラリに保存する。
+- カメラ/書類スキャン由来の補正後画像はユーザー端末の写真ライブラリに保存する。
+- 写真ライブラリから選んだ画像の補正後画像は、二重保存を避けるためアプリ内部に保存する。
 - カレンダー登録はユーザー操作時のみ EventKit で端末のカレンダーへ追加する。
 - CSVエクスポートはユーザーが共有先を選んだ場合のみ共有シートへ渡す。
 - 広告SDKとして Google Mobile Ads SDK を導入済み。
@@ -40,8 +41,8 @@ Google公式メモ: https://developers.google.com/admob/ios/privacy/data-disclos
 `Info.plist` で利用している説明:
 
 - `NSCameraUsageDescription`: プリントを撮影してタスク化するため。
-- `NSPhotoLibraryAddUsageDescription`: 補正後のプリント画像を写真ライブラリへ保存するため。
-- `NSPhotoLibraryUsageDescription`: 保存済みの補正後画像を確認し、OCR根拠を表示するため。
+- `NSPhotoLibraryAddUsageDescription`: カメラ/書類スキャン由来の補正後プリント画像を写真ライブラリへ保存するため。
+- `NSPhotoLibraryUsageDescription`: 写真ライブラリ上の保存済み補正後画像を確認し、OCR根拠を表示するため。
 - `NSCalendarsFullAccessUsageDescription`: 選択したタスクをカレンダーへ登録するため。
 
 ## AdMob

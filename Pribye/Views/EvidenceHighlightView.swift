@@ -13,24 +13,48 @@ struct EvidenceHighlightView: View {
   private let imageAssetService = ImageAssetService()
 
   var body: some View {
-    Group {
-      if isLoading {
-        ProgressView("元画像を確認中")
-      } else if let sourceImage, sourceState == .available {
-        EvidenceImageCanvas(image: sourceImage, observations: highlightedObservations)
-          .padding()
-      } else {
-        ContentUnavailableView(
-          sourceState.message.isEmpty ? "元画像を表示できません" : sourceState.message,
-          systemImage: "photo.badge.exclamationmark"
-        )
+    VStack(alignment: .leading, spacing: 12) {
+      evidenceTextView
+
+      Group {
+        if isLoading {
+          ProgressView("元画像を確認中")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let sourceImage, sourceState == .available {
+          EvidenceImageCanvas(image: sourceImage, observations: highlightedObservations)
+        } else {
+          ContentUnavailableView(
+            sourceState.message.isEmpty ? "元画像を表示できません" : sourceState.message,
+            systemImage: "photo.badge.exclamationmark"
+          )
+        }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+    .padding()
     .navigationTitle("根拠ハイライト")
     .navigationBarTitleDisplayMode(.inline)
     .task {
       await loadImage()
     }
+  }
+
+  private var evidenceTextView: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("このタスクの根拠")
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+      if task.evidenceText.isEmpty {
+        Text("根拠テキストはありません")
+          .foregroundStyle(.secondary)
+      } else {
+        Text(task.evidenceText)
+          .font(.callout)
+          .lineLimit(6)
+          .textSelection(.enabled)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private var highlightedObservations: [OCRObservationRecord] {

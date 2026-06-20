@@ -148,10 +148,10 @@ GitHub Actions:
 
 - `DocumentRecord`
   - プリント単位
-  - 処理状態、ライフサイクル、代表写真アセットID、画像ハッシュ、サムネイル、全ページOCR全文を保持
+  - 処理状態、ライフサイクル、代表画像参照、画像ハッシュ、サムネイル、全ページOCR全文を保持
 - `PageRecord`
   - 複数ページ対応
-  - ページごとの写真アセットID、画像ハッシュ、OCRテキスト、AI補正後OCRテキスト、四隅補正座標を保持
+  - ページごとの画像参照、画像ハッシュ、OCRテキスト、四隅補正座標を保持
 - `OCRObservationRecord`
   - OCR行、信頼度、座標を保持
 - `ExtractedTaskRecord`
@@ -168,7 +168,7 @@ GitHub Actions:
 - 撮影/補正/解析/結果確認フロー
 - 手動タスク追加
 - 設定
-- タスク詳細からの根拠ハイライト表示
+- タスク詳細からの根拠ハイライト表示。根拠テキストと画像ハイライトを同じ画面で確認できる
 
 UI方針:
 
@@ -191,8 +191,9 @@ UI方針:
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は `HeuristicDocumentAnalyzer` へフォールバック
 - `FoundationModelsOCRTextCorrector`
-  - `FoundationModels` framework が利用できる場合、OCR後・タスク抽出前に明らかなOCR誤認だけをオンデバイス補正
-  - 複数ページプリントでは、対象ページ + 次ページ冒頭の文脈でページ単位補正する
+  - `FoundationModels` framework が利用できる場合、タスク化された根拠行だけをオンデバイス補正
+  - 根拠行の前後行、ページ境界では隣接ページの近接行も文脈として渡す
+  - 補正文はOCR結果欄には表示せず、タスクの根拠テキストとして表示する
   - 補正失敗、Apple Intelligence利用不可、モデル未準備の場合は元OCRテキストをそのまま利用
 - `HeuristicDocumentAnalyzer`
   - OCRテキストから期限/期間と行動らしい文を簡易抽出
@@ -203,8 +204,9 @@ UI方針:
 - `CSVExporter`
   - 設定画面からCSV共有
 - `ImageAssetService`
-  - 補正後画像の写真ライブラリ保存
-  - Photos asset ID と画像ハッシュ保存
+  - カメラ/書類スキャン由来の補正後画像は写真ライブラリへ保存
+  - アルバム選択由来の補正後画像は、二重保存を避けるためアプリ内部へ保存
+  - Photos asset ID または内部保存ファイル名と画像ハッシュを保存
   - 元画像削除、写真アクセス拒否、画像変更検知
 - `ImageProcessingService`
   - 四隅座標からCore Imageのperspective correctionを実行
@@ -262,6 +264,9 @@ CIを通すために以下を修正済み:
 
 - Windows環境では `FoundationModels` framework のコンパイル確認とApple Intelligence対応実機検証はできていません。
 - 実機確認手順は `docs/FOUNDATION_MODELS_SETUP.md` に記載済み。
+- GitHub Actions run `27861819455`（`probe-foundation-models-image`）で、Xcode 26.3 / iOS 26 SDK上の小さいFoundation Models typecheckは成功。symbol graph検索では `Prompt` / `Transcript` / `Tool` 系は確認できたが、`UIImage`、`Image`、`Vision`、`Media`、`Multimodal` など直接画像入力に見えるFoundationModels APIは確認できなかった。
+- GitHub Actions run `27865132074` で `Attachment(CGImage)` を使う概念コードをtypecheckした結果、`cannot find 'Attachment' in scope` で失敗。現在のXcode 26.3 / iOS 26 SDKでは、FoundationModelsへ画像を直接渡す `Attachment` APIは利用不可と判断する。
+- GitHub Actions run `27865440946` で `macos-26` / Xcode 26.5（17F42）/ `arm64-apple-ios26.5` targetでも同じ `Attachment(CGImage)` 概念コードをtypecheckしたが、同じく `cannot find 'Attachment' in scope` で失敗。Xcode 26.5でもFoundationModels画像Attachment APIは利用不可と判断する。
 
 ### カメラ・四隅補正
 
@@ -274,16 +279,19 @@ CIを通すために以下を修正済み:
 - `UIImagePickerController` による実機カメラ撮影フォールバック
 - 四隅ドラッグ操作
 - 選択中頂点と接続線の拡大確認
+- VisionKit書類スキャン後も、拡大確認付きの四隅ドラッグ調整画面を表示する。初期四隅は画像全体にし、ユーザーがこの画面で選び直せる
+- VisionKit標準スキャンUIが日本語リソースを選ぶよう、アプリの開発言語/ローカライズは日本語に設定
 - Core Image `CIPerspectiveCorrection` による補正後画像生成
-- 補正後画像の写真ライブラリ保存
-- Photos asset ID 保存
+- カメラ/書類スキャン由来の補正後画像は写真ライブラリへ保存
+- アルバム選択由来の補正後画像は、写真ライブラリへ再保存せずアプリ内部へ保存
+- Photos asset ID または内部保存ファイル名を保存
 - 画像ハッシュ生成と、削除/権限拒否/変更検知
 - タスク詳細からのOCR根拠ハイライト表示
 
 注意:
 
-- OCR座標とハイライト画像の座標系を一致させるため、Pageに紐づけるPhotos assetはページごとの補正後画像です。DocumentのPhotos assetは代表画像として1ページ目を指します。
-- Photos保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
+- OCR座標とハイライト画像の座標系を一致させるため、Pageに紐づける画像参照はページごとの補正後画像です。Documentの画像参照は代表画像として1ページ目を指します。
+- 保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
 - `PHPhotoLibrary` / `PHImageManager` の completion handler はMainActor上で直接定義しない。Swift 6のactor isolation runtime checkで実機クラッシュする可能性があるため、Photos callback は nonisolated helper に閉じ込める。
 - Windows環境ではVisionKit書類スキャン、実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
 
@@ -320,7 +328,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 優先度順:
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightでVisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの写真保存、画像ハッシュ、根拠ハイライトを確認する。
+2. TestFlightでVisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライトを確認する。
 3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
 4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。

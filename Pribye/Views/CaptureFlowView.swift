@@ -16,6 +16,13 @@ struct CapturedPageImage: Identifiable {
   let id = UUID()
   var image: UIImage
   var cropCorners: [CGPoint] = defaultCropCorners()
+  var source: CapturedPageSource = .camera
+}
+
+enum CapturedPageSource {
+  case camera
+  case photoLibrary
+  case documentScanner
 }
 
 struct CaptureFlowView: View {
@@ -80,9 +87,9 @@ struct CaptureFlowView: View {
       }
       .ignoresSafeArea()
     }
-    .fullScreenCover(isPresented: $isShowingCamera) {
+      .fullScreenCover(isPresented: $isShowingCamera) {
       CameraImagePicker { image in
-        setCapturedPages([image])
+        setCapturedPages([image], source: .camera)
         selectedItem = nil
         isShowingCamera = false
       } onCancel: {
@@ -130,7 +137,7 @@ struct CaptureFlowView: View {
       }
       .buttonStyle(.bordered)
 
-      Text("写真・OCR・AI結果は外部AI APIへ送信しません。補正後の画像は写真ライブラリに保存します。")
+      Text("写真・OCR・AI結果は外部AI APIへ送信しません。写真から選んだ画像は写真ライブラリへ再保存しません。")
         .font(.footnote)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -154,7 +161,11 @@ struct CaptureFlowView: View {
           .font(.caption.weight(.semibold))
           .foregroundStyle(.secondary)
 
-        CropPreview(image: selectedPage.image, corners: selectedPageCorners)
+        CropPreview(
+          image: selectedPage.image,
+          corners: selectedPageCorners,
+          instructionText: cropInstructionText(for: selectedPage)
+        )
           .frame(maxHeight: 520)
       }
 
@@ -221,7 +232,7 @@ struct CaptureFlowView: View {
       step = .failed("画像を読み込めませんでした")
       return
     }
-    setCapturedPages([image])
+    setCapturedPages([image], source: .photoLibrary)
   }
 
   @MainActor
@@ -231,13 +242,23 @@ struct CaptureFlowView: View {
       return
     }
 
-    setCapturedPages(images)
+    setCapturedPages(images, initialCropCorners: fullCropCorners(), source: .documentScanner)
     selectedItem = nil
   }
 
   @MainActor
-  private func setCapturedPages(_ images: [UIImage]) {
-    capturedPages = images.map { CapturedPageImage(image: $0.normalizedForProcessing()) }
+  private func setCapturedPages(
+    _ images: [UIImage],
+    initialCropCorners: [CGPoint] = defaultCropCorners(),
+    source: CapturedPageSource = .camera
+  ) {
+    capturedPages = images.map {
+      CapturedPageImage(
+        image: $0.normalizedForProcessing(),
+        cropCorners: initialCropCorners,
+        source: source
+      )
+    }
     selectedPageIndex = 0
     step = capturedPages.isEmpty ? .failed("画像を読み込めませんでした") : .correction
   }
@@ -280,7 +301,6 @@ struct CaptureFlowView: View {
 
     do {
       var rawSnapshots: [OCRPageSnapshot] = []
-      var pageRecords: [PageRecord] = []
 
       for (pageIndex, capturedPage) in capturedPages.enumerated() {
         let correctedImage = try imageProcessingService.correctPerspective(
@@ -292,16 +312,18 @@ struct CaptureFlowView: View {
           document.thumbnailData = correctedImage.jpegData(compressionQuality: 0.45)
         }
 
-        let savedAsset = try await imageAssetService.saveImage(correctedImage)
+        let imageReference = try await saveImageReference(correctedImage, source: capturedPage.source)
         if pageIndex == 0 {
-          document.photoAssetIdentifier = savedAsset.localIdentifier
-          document.imageHash = savedAsset.imageHash
+          document.photoAssetIdentifier = imageReference.photoAssetIdentifier
+          document.localImageFilename = imageReference.localImageFilename
+          document.imageHash = imageReference.imageHash
         }
 
         let ocr = try await ocrService.recognizeText(in: correctedImage)
         let page = PageRecord(pageIndex: pageIndex, ocrText: ocr.text)
-        page.photoAssetIdentifier = savedAsset.localIdentifier
-        page.imageHash = savedAsset.imageHash
+        page.photoAssetIdentifier = imageReference.photoAssetIdentifier
+        page.localImageFilename = imageReference.localImageFilename
+        page.imageHash = imageReference.imageHash
         page.setCropCorners(capturedPage.cropCorners)
         page.observations = ocr.observations.map {
           OCRObservationRecord(
@@ -314,7 +336,6 @@ struct CaptureFlowView: View {
           )
         }
         document.pages.append(page)
-        pageRecords.append(page)
         rawSnapshots.append(
           OCRPageSnapshot(
             pageIndex: pageIndex,
@@ -327,24 +348,10 @@ struct CaptureFlowView: View {
       document.ocrText = combinedOCRText(from: rawSnapshots)
       document.status = .aiProcessing
 
-      let correctedSnapshots = await correctPageSnapshots(rawSnapshots)
-      for correctedSnapshot in correctedSnapshots {
-        guard pageRecords.indices.contains(correctedSnapshot.pageIndex) else {
-          continue
-        }
-        let page = pageRecords[correctedSnapshot.pageIndex]
-        if correctedSnapshot.text != page.ocrText {
-          page.correctedOCRText = correctedSnapshot.text
-        }
-      }
-      let combinedCorrectedText = combinedOCRText(from: correctedSnapshots)
-      if combinedCorrectedText != document.ocrText {
-        document.correctedOCRText = combinedCorrectedText
-      }
-
-      let result = try await analyzePageScoped(correctedSnapshots)
+      let result = try await analyzePageScoped(rawSnapshots)
+      let correctedTasks = await correctTaskEvidence(result.tasks, in: rawSnapshots)
       document.title = result.documentTitle
-      document.tasks = result.tasks.map { draft in
+      document.tasks = correctedTasks.map { draft in
         let task = ExtractedTaskRecord(
           title: draft.title,
           note: draft.note,
@@ -370,6 +377,10 @@ struct CaptureFlowView: View {
       document.status = .failed
       document.failureReason = .imageError
       step = .failed("補正後の画像を写真ライブラリへ保存できませんでした")
+    } catch ImageAssetError.imageLoadFailed {
+      document.status = .failed
+      document.failureReason = .imageError
+      step = .failed("補正後の画像を保存できませんでした")
     } catch ImageAssetError.correctionFailed {
       document.status = .failed
       document.failureReason = .imageError
@@ -379,18 +390,6 @@ struct CaptureFlowView: View {
       document.failureReason = .unknownError
       step = .failed("解析中にエラーが発生しました")
     }
-  }
-
-  private func correctPageSnapshots(_ snapshots: [OCRPageSnapshot]) async -> [OCRPageSnapshot] {
-    var correctedSnapshots = snapshots
-    for index in snapshots.indices {
-      let scopedSnapshots = pageScopedSnapshots(targetIndex: index, snapshots: snapshots)
-      let correctedScopedSnapshots = await ocrCorrector.correct(pages: scopedSnapshots)
-      if let correctedTarget = correctedScopedSnapshots.first {
-        correctedSnapshots[index] = correctedTarget
-      }
-    }
-    return correctedSnapshots
   }
 
   private func analyzePageScoped(_ snapshots: [OCRPageSnapshot]) async throws -> AnalysisResult {
@@ -426,6 +425,112 @@ struct CaptureFlowView: View {
       documentTitle: documentTitle ?? inferredDocumentTitle(from: snapshots),
       tasks: uniqueTasks
     )
+  }
+
+  private func saveImageReference(_ image: UIImage, source: CapturedPageSource) async throws -> StoredImageReference {
+    switch source {
+    case .photoLibrary:
+      let savedFile = try imageAssetService.saveImageLocally(image)
+      return StoredImageReference(
+        photoAssetIdentifier: nil,
+        localImageFilename: savedFile.filename,
+        imageHash: savedFile.imageHash
+      )
+    case .camera, .documentScanner:
+      let savedAsset = try await imageAssetService.saveImage(image)
+      return StoredImageReference(
+        photoAssetIdentifier: savedAsset.localIdentifier,
+        localImageFilename: nil,
+        imageHash: savedAsset.imageHash
+      )
+    }
+  }
+
+  private func correctTaskEvidence(_ tasks: [TaskDraft], in snapshots: [OCRPageSnapshot]) async -> [TaskDraft] {
+    var correctedTasks = tasks
+    var correctedEvidenceByObservationID: [UUID: String] = [:]
+
+    for index in correctedTasks.indices {
+      guard let evidenceObservationID = correctedTasks[index].evidenceObservationID else {
+        continue
+      }
+      if let cachedText = correctedEvidenceByObservationID[evidenceObservationID] {
+        correctedTasks[index].evidenceText = cachedText
+        continue
+      }
+      guard let contextSnapshots = correctionContextSnapshots(
+        for: evidenceObservationID,
+        in: snapshots
+      ) else {
+        continue
+      }
+
+      let correctedSnapshots = await ocrCorrector.correct(pages: contextSnapshots)
+      guard let correctedText = correctedSnapshots
+        .flatMap(\.observations)
+        .first(where: { $0.id == evidenceObservationID })?
+        .text
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+        !correctedText.isEmpty
+      else {
+        continue
+      }
+
+      correctedEvidenceByObservationID[evidenceObservationID] = correctedText
+      correctedTasks[index].evidenceText = correctedText
+    }
+
+    return correctedTasks
+  }
+
+  private func correctionContextSnapshots(for observationID: UUID, in snapshots: [OCRPageSnapshot]) -> [OCRPageSnapshot]? {
+    let sortedSnapshots = snapshots.sorted { $0.pageIndex < $1.pageIndex }
+    for pagePosition in sortedSnapshots.indices {
+      let page = sortedSnapshots[pagePosition]
+      guard let observationIndex = page.observations.firstIndex(where: { $0.id == observationID }) else {
+        continue
+      }
+
+      var context: [OCRPageSnapshot] = []
+      if observationIndex == page.observations.startIndex,
+         pagePosition > sortedSnapshots.startIndex,
+         let previousObservation = sortedSnapshots[pagePosition - 1].observations.last {
+        context.append(
+          OCRPageSnapshot(
+            pageIndex: sortedSnapshots[pagePosition - 1].pageIndex,
+            text: previousObservation.text,
+            observations: [previousObservation]
+          )
+        )
+      }
+
+      let lowerBound = Swift.max(page.observations.startIndex, observationIndex - 1)
+      let upperBound = Swift.min(page.observations.index(before: page.observations.endIndex), observationIndex + 1)
+      let targetContext = Array(page.observations[lowerBound...upperBound])
+      context.append(
+        OCRPageSnapshot(
+          pageIndex: page.pageIndex,
+          text: targetContext.map(\.text).joined(separator: "\n"),
+          observations: targetContext
+        )
+      )
+
+      if observationIndex == page.observations.index(before: page.observations.endIndex),
+         pagePosition < sortedSnapshots.index(before: sortedSnapshots.endIndex),
+         let nextObservation = sortedSnapshots[pagePosition + 1].observations.first {
+        context.append(
+          OCRPageSnapshot(
+            pageIndex: sortedSnapshots[pagePosition + 1].pageIndex,
+            text: nextObservation.text,
+            observations: [nextObservation]
+          )
+        )
+      }
+
+      return context
+    }
+
+    return nil
   }
 
   private func pageScopedSnapshots(targetIndex: Int, snapshots: [OCRPageSnapshot]) -> [OCRPageSnapshot] {
@@ -486,6 +591,21 @@ struct CaptureFlowView: View {
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .first { !$0.isEmpty } ?? "プリント"
   }
+
+  private func cropInstructionText(for page: CapturedPageImage) -> String {
+    switch page.source {
+    case .documentScanner:
+      return "この画面でも四隅を選んで調整できます。上部の拡大表示で、指に隠れる角を確認できます。"
+    case .camera, .photoLibrary:
+      return "四隅を合わせてから解析へ進みます。上部で選択中の角を拡大確認できます。"
+    }
+  }
+}
+
+private struct StoredImageReference {
+  var photoAssetIdentifier: String?
+  var localImageFilename: String?
+  var imageHash: String
 }
 
 struct CropPreview: View {
@@ -493,6 +613,7 @@ struct CropPreview: View {
 
   var image: UIImage
   @Binding var corners: [CGPoint]
+  var instructionText: String
   @State private var selectedCornerIndex = 0
 
   var body: some View {
@@ -504,7 +625,7 @@ struct CropPreview: View {
       EditableCornerImage(image: image, corners: $corners, selectedCornerIndex: $selectedCornerIndex)
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
-      Text("四隅を合わせてから解析へ進みます。上部で選択中の角を拡大確認できます。")
+      Text(instructionText)
         .font(.footnote)
         .foregroundStyle(.secondary)
     }
@@ -517,6 +638,15 @@ private func defaultCropCorners() -> [CGPoint] {
     CGPoint(x: 0.94, y: 0.06),
     CGPoint(x: 0.94, y: 0.94),
     CGPoint(x: 0.06, y: 0.94)
+  ]
+}
+
+private func fullCropCorners() -> [CGPoint] {
+  [
+    CGPoint(x: 0, y: 0),
+    CGPoint(x: 1, y: 0),
+    CGPoint(x: 1, y: 1),
+    CGPoint(x: 0, y: 1)
   ]
 }
 
