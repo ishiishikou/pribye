@@ -23,7 +23,7 @@ final class ModelStateTests: XCTestCase {
     let document = DocumentRecord(status: .aiProcessing)
 
     XCTAssertEqual(document.status, .aiProcessing)
-    XCTAssertEqual(document.status.userLabel, "解析中")
+    XCTAssertEqual(document.status.userLabel, "AI解析中")
 
     document.status = .ready
 
