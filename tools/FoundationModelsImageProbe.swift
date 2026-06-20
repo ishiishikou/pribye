@@ -1,6 +1,7 @@
 #if canImport(FoundationModels)
 import Foundation
 import FoundationModels
+import CoreGraphics
 
 @available(iOS 26.0, *)
 func makeProbeSession() -> LanguageModelSession {
@@ -26,6 +27,15 @@ func probeStructuredTextResponse() async throws -> FoundationModelsProbeOutput {
     includeSchemaInPrompt: true
   )
   return response.content
+}
+
+@available(iOS 26.0, *)
+func probeImageAttachmentResponse(image: CGImage) async throws -> LanguageModelSession.Response<String> {
+  let session = makeProbeSession()
+  return try await session.respond {
+    Attachment(image)
+    "この画像を説明してください"
+  }
 }
 #else
 #error("FoundationModels is not available in this SDK.")
