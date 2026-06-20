@@ -5,7 +5,7 @@ struct SettingsView: View {
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
 
   @AppStorage("adsRemoved") private var adsRemoved = false
-  @AppStorage("developmentTaskExtractionPrompt") private var developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
+  @AppStorage("developmentSummaryPrompt") private var developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
   @StateObject private var purchaseService = PurchaseService()
 
   private var csvText: String {
@@ -58,19 +58,19 @@ struct SettingsView: View {
       }
 
       Section("開発中") {
-        Text("タスク抽出プロンプト")
+        Text("要約プロンプト")
           .font(.headline)
-        Text("現在の本番解析に使われるプロンプトです。App Store提出前にこの開発用入力欄は削除してください。")
+        Text("本番解析の最初の要約ステップに使われるプロンプトです。App Store提出前にこの開発用入力欄は削除してください。")
           .font(.footnote)
           .foregroundStyle(.secondary)
-        TextEditor(text: $developmentTaskExtractionPrompt)
-          .frame(minHeight: 180)
+        TextEditor(text: $developmentSummaryPrompt)
+          .frame(minHeight: 80)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
         Button("既定プロンプトに戻す") {
-          developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
+          developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
         }
-        .disabled(developmentTaskExtractionPrompt == FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions)
+        .disabled(developmentSummaryPrompt == FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions)
       }
 
       Section("その他") {
@@ -91,8 +91,8 @@ struct SettingsView: View {
     }
     .navigationTitle("設定")
     .task {
-      if developmentTaskExtractionPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
+      if developmentSummaryPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
       }
       await purchaseService.loadRemoveAdsProduct()
       adsRemoved = await purchaseService.refreshEntitlement()

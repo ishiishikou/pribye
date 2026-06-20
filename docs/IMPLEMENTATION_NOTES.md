@@ -12,7 +12,7 @@
 
 `DocumentAnalyzer` はプロトコルで分離済み。`FoundationModelsDocumentAnalyzer` はFoundation Models接続の唯一の境界です。
 
-`canImport(FoundationModels)` かつ `SystemLanguageModel.default.isAvailable` の場合は `LanguageModelSession` のstructured generationを使う。SDK未解決、Apple Intelligence利用不可、モデル未準備、モデル出力不正の場合はフォールバックせず、Apple Intelligenceをオンにする案内または解析失敗として扱う。
+`canImport(FoundationModels)` かつ `SystemLanguageModel.default.isAvailable` の場合は `LanguageModelSession` の自由応答を短いプロンプトで段階実行する。SDK未解決、Apple Intelligence利用不可、モデル未準備、モデル出力不正の場合はフォールバックせず、Apple Intelligenceをオンにする案内または解析失敗として扱う。
 
 複数ページプリントでは、全ページを一括でタスク抽出へ渡さない。ページごとに対象ページを先頭にし、次ページ冒頭のOCR行だけを文脈として付ける。
 

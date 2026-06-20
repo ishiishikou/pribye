@@ -74,142 +74,201 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
   #if canImport(FoundationModels)
   @available(iOS 26.0, *)
   private func analyzeWithFoundationModels(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
-    let session = LanguageModelSession(
-      model: .default,
-      instructions: Self.taskExtractionInstructions
-    )
+    let ocrText = Self.plainOCRText(from: pages)
+    guard !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
 
-    let response = try await session.respond(
-      to: makeFoundationModelPrompt(pages: pages),
-      generating: FoundationModelAnalysisOutput.self,
-      includeSchemaInPrompt: true
+    let summary = try await foundationResponse(
+      instructions: Self.summaryPrompt,
+      input: ocrText
     )
+    let taskText = try await foundationResponse(
+      instructions: "保護者のタスクを抽出してください",
+      input: summary
+    )
+    let taskNotes = Self.lines(from: taskText)
+    guard !taskNotes.isEmpty else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
 
-    return try response.content.analysisResult()
+    var drafts: [TaskDraft] = []
+    for note in taskNotes {
+      let titleResponse = try await foundationResponse(
+        instructions: "タスクを1行20文字以内で生成してください。",
+        input: note
+      )
+      let title = Self.compactGeneratedTitle(titleResponse)
+      guard !title.isEmpty else {
+        continue
+      }
+
+      let evidenceText = try await foundationResponse(
+        instructions: "OCR文章から「\(note)」を抽出しました。抽出元の根拠となった文章をOCR文章からだしてください。",
+        input: ocrText
+      )
+      let evidence = Self.compactEvidenceText(evidenceText)
+      guard !evidence.isEmpty else {
+        throw DocumentAnalyzerError.malformedModelOutput
+      }
+
+      let parsedDate = DateRangeParser().parse(note)
+      drafts.append(TaskDraft(
+        title: title,
+        note: note,
+        dueStart: parsedDate.start,
+        dueEnd: parsedDate.end,
+        evidenceText: evidence,
+        evidenceObservationID: Self.bestObservationID(for: evidence, in: pages)
+      ))
+    }
+
+    guard !drafts.isEmpty else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
+
+    return AnalysisResult(
+      documentTitle: Self.documentTitle(from: summary, pages: pages),
+      tasks: drafts
+    )
   }
 
-  private func makeFoundationModelPrompt(pages: [OCRPageSnapshot]) -> String {
-    let pageText = pages
-      .map { page in
-        let observations = page.observations
-          .map { "- id: \($0.id.uuidString)\n  text: \($0.text)" }
-          .joined(separator: "\n")
-        return "Page \(page.pageIndex + 1):\n\(observations)"
-      }
-      .joined(separator: "\n\n")
-
-    return """
-    次のOCR行から、ユーザーが実際に行うタスクだけを抽出してください。
-    行動ではない見出し、説明文、挨拶、問い合わせ先はタスクにしないでください。
-    OCRに年まで判断できる情報がない日付は設定しないでください。
-
-    OCR:
-    \(pageText)
-    """
+  private func foundationResponse(instructions: String, input: String) async throws -> String {
+    let session = LanguageModelSession(
+      model: .default,
+      instructions: instructions
+    )
+    let response = try await session.respond(to: input)
+    let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !content.isEmpty else {
+      throw DocumentAnalyzerError.malformedModelOutput
+    }
+    return content
   }
   #endif
 
-  private static var taskExtractionInstructions: String {
-    let customPrompt = UserDefaults.standard.string(forKey: "developmentTaskExtractionPrompt")?
+  private static var summaryPrompt: String {
+    let customPrompt = UserDefaults.standard.string(forKey: "developmentSummaryPrompt")?
       .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return customPrompt.isEmpty ? defaultTaskExtractionInstructions : customPrompt
   }
 
-  static let defaultTaskExtractionInstructions = """
-  あなたは学校・幼稚園などの配布プリントから、タスク管理アプリに登録するためのタスク一覧を作成するアシスタントです。
-  OCRで読み取った内容のみを根拠として、ユーザーが実際に行うタスクを抽出してください。
-  外部知識で内容を補完・推測してはいけません。
-  OCRの誤認識と思われる箇所は、OCR内の文脈から自然に補正できる場合のみ補正してください。不確かな場合は補正しないでください。
-  複数ページが渡された場合、タスク抽出対象は入力内で最初に表示されたPageのみとし、後続Pageは文脈理解のためだけに参照してください。
-  分類、場所、優先度、全文要約は作成しないでください。
-  ユーザーが一度の作業として実施できる内容を1タスクとし、同じ目的の連続した作業は1つにまとめてください。
-  細かな手順には分割せず、必要以上にタスク数を増やさないでください。
-  各タスクは15文字以内で簡潔に表現し、「〜してください」などの依頼表現は含めないでください。
-  時系列は維持してください。
-  日付はOCRから判断できる場合のみ yyyy-MM-dd 形式で返してください。不明な場合は設定しないでください。
-  根拠には、対応するOCR行の text を短くそのまま引用し、対応する observation ID を必ず指定してください。
-  """
-}
+  static let defaultTaskExtractionInstructions = "要約してください"
 
-#if canImport(FoundationModels)
-@available(iOS 26.0, *)
-@Generable(description: "A minimal task extraction result from a printed school notice")
-private struct FoundationModelAnalysisOutput {
-  @Guide(description: "A short title for the printed document in Japanese")
-  var documentTitle: String
-
-  @Guide(description: "Only actionable tasks found in the OCR text")
-  var tasks: [FoundationModelTaskOutput]
-
-  func analysisResult() throws -> AnalysisResult {
-    let convertedTasks = tasks.compactMap { task -> TaskDraft? in
-      let title = Self.compactTaskTitle(task.title)
-      guard !title.isEmpty else {
-        return nil
+  static func plainOCRText(from pages: [OCRPageSnapshot]) -> String {
+    pages
+      .sorted { $0.pageIndex < $1.pageIndex }
+      .map { page in
+        if page.observations.isEmpty {
+          return page.text
+        }
+        return page.observations.map(\.text).joined(separator: "\n")
       }
-
-      return TaskDraft(
-        title: title,
-        note: "",
-        dueStart: Self.parseDate(task.dueStart),
-        dueEnd: Self.parseDate(task.dueEnd),
-        evidenceText: task.evidenceText.trimmingCharacters(in: .whitespacesAndNewlines),
-        evidenceObservationID: task.evidenceObservationID.flatMap(UUID.init(uuidString:))
-      )
-    }
-
-    guard !convertedTasks.isEmpty else {
-      throw DocumentAnalyzerError.noActionableTasks
-    }
-
-    let title = documentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    return AnalysisResult(
-      documentTitle: title.isEmpty ? "プリント" : title,
-      tasks: convertedTasks
-    )
+      .joined(separator: "\n\n")
   }
 
-  private static func compactTaskTitle(_ value: String) -> String {
-    let title = value
+  static func lines(from text: String) -> [String] {
+    text
+      .components(separatedBy: .newlines)
+      .map { cleanedListLine($0) }
+      .filter { !$0.isEmpty && !isEmptyModelAnswer($0) }
+  }
+
+  static func compactGeneratedTitle(_ text: String) -> String {
+    let title = (lines(from: text).first ?? cleanedListLine(text))
       .replacingOccurrences(of: "してください", with: "")
       .replacingOccurrences(of: "お願いします", with: "")
       .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-    return String(title.prefix(15))
+    return String(title.prefix(20))
   }
 
-  private static func parseDate(_ value: String?) -> Date? {
-    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+  static func compactEvidenceText(_ text: String) -> String {
+    lines(from: text).first ?? text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  static func bestObservationID(for evidence: String, in pages: [OCRPageSnapshot]) -> UUID? {
+    let candidates = pages.flatMap(\.observations)
+    guard !candidates.isEmpty else {
       return nil
     }
 
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter.date(from: value)
+    let normalizedEvidence = normalizedText(evidence)
+    guard !normalizedEvidence.isEmpty else {
+      return nil
+    }
+
+    let bestMatch = candidates
+      .map { observation in
+        (id: observation.id, score: similarityScore(normalizedEvidence, normalizedText(observation.text)))
+      }
+      .max { $0.score < $1.score }
+
+    guard let bestMatch, bestMatch.score > 0 else {
+      return nil
+    }
+    return bestMatch.id
+  }
+
+  static func documentTitle(from summary: String, pages: [OCRPageSnapshot]) -> String {
+    let summaryTitle = lines(from: summary).first ?? ""
+    if !summaryTitle.isEmpty {
+      return String(summaryTitle.prefix(20))
+    }
+
+    let ocrTitle = plainOCRText(from: pages)
+      .components(separatedBy: .newlines)
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .first { !$0.isEmpty } ?? "プリント"
+    return String(ocrTitle.prefix(20))
+  }
+
+  private static func cleanedListLine(_ text: String) -> String {
+    let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let pattern = #"^\s*(?:[-・*]|[0-9０-９]+[.)．、])\s*"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else {
+      return line
+    }
+    let range = NSRange(line.startIndex..<line.endIndex, in: line)
+    return regex
+      .stringByReplacingMatches(in: line, options: [], range: range, withTemplate: "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private static func isEmptyModelAnswer(_ text: String) -> Bool {
+    let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+    return ["ありません", "なし", "無し", "該当なし", "タスクなし"].contains(normalized)
+  }
+
+  private static func normalizedText(_ text: String) -> String {
+    text
+      .lowercased()
+      .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+      .trimmingCharacters(in: .punctuationCharacters)
+  }
+
+  private static func similarityScore(_ lhs: String, _ rhs: String) -> Int {
+    guard !lhs.isEmpty, !rhs.isEmpty else {
+      return 0
+    }
+    if lhs == rhs {
+      return Int.max
+    }
+    if lhs.contains(rhs) || rhs.contains(lhs) {
+      return Swift.max(lhs.count, rhs.count)
+    }
+
+    let lhsCharacters = Array(lhs)
+    let rhsCharacters = Array(rhs)
+    var lengths = Array(repeating: Array(repeating: 0, count: rhsCharacters.count + 1), count: lhsCharacters.count + 1)
+    var best = 0
+
+    for lhsIndex in lhsCharacters.indices {
+      for rhsIndex in rhsCharacters.indices where lhsCharacters[lhsIndex] == rhsCharacters[rhsIndex] {
+        let length = lengths[lhsIndex][rhsIndex] + 1
+        lengths[lhsIndex + 1][rhsIndex + 1] = length
+        best = Swift.max(best, length)
+      }
+    }
+    return best
   }
 }
-
-@available(iOS 26.0, *)
-@Generable(description: "One actionable task extracted from OCR text")
-private struct FoundationModelTaskOutput {
-  @Guide(description: "A concise task title in Japanese")
-  var title: String
-
-  @Guide(description: "A short optional note. Leave empty unless it is needed to act.")
-  var note: String?
-
-  @Guide(description: "Start date for a period task as yyyy-MM-dd. Leave empty when not applicable.")
-  var dueStart: String?
-
-  @Guide(description: "Deadline or end date as yyyy-MM-dd. Leave empty when not applicable.")
-  var dueEnd: String?
-
-  @Guide(description: "The exact OCR text that supports this task")
-  var evidenceText: String
-
-  @Guide(description: "The UUID string of the OCR observation that supports this task")
-  var evidenceObservationID: String?
-}
-#endif

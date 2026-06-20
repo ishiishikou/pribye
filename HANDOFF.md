@@ -191,10 +191,14 @@ UI方針:
 - `DocumentAnalyzer`
   - AI抽出境界
 - `FoundationModelsDocumentAnalyzer`
-  - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
+  - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の自由応答を短いプロンプトで段階実行する
+  - 解析手順は、OCR全文を「要約してください」で要約し、要約文から「保護者のタスクを抽出してください」でタスク本文を抽出し、各タスク本文から「タスクを1行20文字以内で生成してください。」でタイトルを生成し、最後にOCR全文から根拠文章を抽出する
+  - 保存時は、タイトル=生成タイトル、メモ=抽出タスク本文、根拠=OCR全文から抽出した根拠文章
+  - 根拠ハイライト用の `evidenceObservationID` は、抽出した根拠文章に最も近いOCR行をローカル照合して設定する
+  - 期限/期間はAIに日付形式を要求せず、抽出タスク本文を `DateRangeParser` でローカル解析する
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合はフォールバックせず、解析失敗として表示する
-  - 開発中は設定画面の `タスク抽出プロンプト` で instructions を上書きできる。入力欄には既定プロンプト本文を初期表示し、編集内容が本番解析に使われる。App Store提出前にこの入力欄は削除する
+  - 開発中は設定画面の `要約プロンプト` で最初の要約ステップだけを上書きできる。既定値は `要約してください`。App Store提出前にこの入力欄は削除する
 - `AppleIntelligenceChatService`
   - 開発用 `AI実験` タブ専用。`LanguageModelSession` の自由応答で、プロンプト + OCR文章に対するApple Intelligenceの回答を確認する
   - structured generation、JSON生成、タスク保存、OCR補正、既存解析パイプラインには接続しない
@@ -207,6 +211,7 @@ UI方針:
   - 根拠行の前後行、ページ境界では隣接ページの近接行も文脈として渡す
   - 補正文はOCR結果欄には表示せず、タスクの根拠テキストとして表示する
   - 補正失敗、Apple Intelligence利用不可、モデル未準備、モデル出力不正の場合は元OCRテキストへフォールバックせず、解析失敗として表示する
+  - 現在の本番解析パイプラインでは、短い段階プロンプトの根拠抽出結果をそのまま根拠テキストに保存するため、この補正サービスは呼び出していない
 - `DateRangeParser`
   - `6月20日まで`、`6/15〜6/20` などを解析
 - `EventKitCalendarService`
@@ -344,7 +349,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
 2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
 3. `AI実験` タブでプロンプトとOCR文章を入力し、Apple Intelligenceの自由応答を実機確認する。
-4. 開発中設定のタスク抽出プロンプト欄で、Foundation Modelsの抽出精度を実機調整する。
+4. 開発中設定の要約プロンプト欄と `AI実験` タブで、短い段階プロンプト方式の抽出精度を実機調整する。
 5. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
 6. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
 7. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。

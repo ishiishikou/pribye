@@ -33,26 +33,34 @@
 2. Apple Intelligence対応実機で `SystemLanguageModel.default.isAvailable` がtrueになることを確認する。
 3. 入力は OCR テキストと観測行IDだけにする。画像そのものはモデルへ渡さない。
 4. 複数ページプリントでは、全ページ一括ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する。
-5. 返却形式は `AnalysisResult` に正規化する。
+5. 短いプロンプトの段階実行結果を `AnalysisResult` に正規化する。
 6. 実APIが利用不可の場合、低精度fallbackに進まず、Apple Intelligenceをオンにする案内または解析失敗として見えることを確認する。
 
 ## Prompt 要件
 
-開発中は設定画面の `タスク抽出プロンプト` に入力すると、`FoundationModelsDocumentAnalyzer` の instructions を上書きできます。空欄の場合はアプリ内の既定プロンプトを使います。この入力欄はApp Store提出前に削除してください。
+本番解析は、次の短いプロンプトを段階実行します。
+
+1. OCR全文に対して `要約してください`
+2. 要約文に対して `保護者のタスクを抽出してください`
+3. 抽出タスク本文ごとに `タスクを1行20文字以内で生成してください。`
+4. OCR全文に対して `OCR文章から「抽出タスク本文」を抽出しました。抽出元の根拠となった文章をOCR文章からだしてください。`
+
+開発中は設定画面の `要約プロンプト` に入力すると、最初の要約ステップだけを上書きできます。空欄の場合は `要約してください` を使います。この入力欄はApp Store提出前に削除してください。
 
 抽出対象:
 
-- プリント名
-- タスク名
-- 期限または期間
+- タスクタイトル
+- メモに保存する抽出タスク本文
+- `DateRangeParser` で抽出タスク本文から解析できる期限または期間
 - 根拠テキスト
-- 根拠に対応する OCR observation ID
+- 根拠テキストに近いOCR行からローカル照合した observation ID
 
 OCR補正:
 
 - 明らかなOCR誤認だけを補正する
 - 元OCRにない内容を追加しない
 - observation ID と行の対応を維持する
+- 現在の本番解析では、段階プロンプトで得た根拠テキストをそのまま保存するため `FoundationModelsOCRTextCorrector` は呼び出していない
 
 抽出しない:
 
@@ -73,7 +81,7 @@ OCR補正:
 - 期間行から開始日/終了日つきタスクが作られる。
 - 根拠ハイライトが該当行に重なる。
 - 複数ページスキャンで、2ページ目以降の根拠ハイライトが該当ページ画像に重なる。
-- OCR誤認例（例: `2タ` -> `フタ`）が補正され、元OCRも詳細画面で確認できる。
+- OCR誤認例（例: `2タ` -> `フタ`）で、抽出タスク本文と根拠テキストが期待する内容になる。
 - モデル出力が空または不正な場合、解析失敗UIから再解析/手動登録へ進める。
 - Apple Intelligence が使えない端末や設定OFFの状態でクラッシュせず、Apple Intelligenceをオンにする案内が出る。
 
@@ -81,8 +89,9 @@ OCR補正:
 
 Apple Developer Documentation は通常HTMLではJavaScript必須ですが、DocC JSONから以下を確認済みです。
 
-- `LanguageModelSession.respond(to:generating:includeSchemaInPrompt:options:)`
+- `LanguageModelSession.respond(to:)`
 - `LanguageModelSession.Response.content`
+- `LanguageModelSession.respond(to:generating:includeSchemaInPrompt:options:)`
 - `@Generable(description:)`
 - `@Guide(description:)`
 - `SystemLanguageModel.default.isAvailable`

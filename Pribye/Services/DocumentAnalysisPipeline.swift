@@ -2,15 +2,13 @@ import Foundation
 
 struct DocumentAnalysisPipeline {
   var analyzer: DocumentAnalyzer = FoundationModelsDocumentAnalyzer()
-  var ocrCorrector: OCRTextCorrector = FoundationModelsOCRTextCorrector()
 
   @MainActor
   func applyAnalysis(to document: DocumentRecord, snapshots: [OCRPageSnapshot]) async throws {
     let result = try await analyzePageScoped(snapshots)
-    let correctedTasks = try await correctTaskEvidence(result.tasks, in: snapshots)
 
     document.title = result.documentTitle
-    document.tasks = correctedTasks.map { draft in
+    document.tasks = result.tasks.map { draft in
       let task = ExtractedTaskRecord(
         title: draft.title,
         note: draft.note,
@@ -58,93 +56,6 @@ struct DocumentAnalysisPipeline {
       documentTitle: documentTitle ?? inferredDocumentTitle(from: snapshots),
       tasks: uniqueTasks
     )
-  }
-
-  private func correctTaskEvidence(_ tasks: [TaskDraft], in snapshots: [OCRPageSnapshot]) async throws -> [TaskDraft] {
-    var correctedTasks = tasks
-    var correctedEvidenceByObservationID: [UUID: String] = [:]
-
-    for index in correctedTasks.indices {
-      guard let evidenceObservationID = correctedTasks[index].evidenceObservationID else {
-        continue
-      }
-      if let cachedText = correctedEvidenceByObservationID[evidenceObservationID] {
-        correctedTasks[index].evidenceText = cachedText
-        continue
-      }
-      guard let contextSnapshots = correctionContextSnapshots(
-        for: evidenceObservationID,
-        in: snapshots
-      ) else {
-        continue
-      }
-
-      let correctedSnapshots = try await ocrCorrector.correct(pages: contextSnapshots)
-      guard let correctedText = correctedSnapshots
-        .flatMap(\.observations)
-        .first(where: { $0.id == evidenceObservationID })?
-        .text
-        .trimmingCharacters(in: .whitespacesAndNewlines),
-        !correctedText.isEmpty
-      else {
-        continue
-      }
-
-      correctedEvidenceByObservationID[evidenceObservationID] = correctedText
-      correctedTasks[index].evidenceText = correctedText
-    }
-
-    return correctedTasks
-  }
-
-  private func correctionContextSnapshots(for observationID: UUID, in snapshots: [OCRPageSnapshot]) -> [OCRPageSnapshot]? {
-    let sortedSnapshots = snapshots.sorted { $0.pageIndex < $1.pageIndex }
-    for pagePosition in sortedSnapshots.indices {
-      let page = sortedSnapshots[pagePosition]
-      guard let observationIndex = page.observations.firstIndex(where: { $0.id == observationID }) else {
-        continue
-      }
-
-      var context: [OCRPageSnapshot] = []
-      if observationIndex == page.observations.startIndex,
-         pagePosition > sortedSnapshots.startIndex,
-         let previousObservation = sortedSnapshots[pagePosition - 1].observations.last {
-        context.append(
-          OCRPageSnapshot(
-            pageIndex: sortedSnapshots[pagePosition - 1].pageIndex,
-            text: previousObservation.text,
-            observations: [previousObservation]
-          )
-        )
-      }
-
-      let lowerBound = Swift.max(page.observations.startIndex, observationIndex - 1)
-      let upperBound = Swift.min(page.observations.index(before: page.observations.endIndex), observationIndex + 1)
-      let targetContext = Array(page.observations[lowerBound...upperBound])
-      context.append(
-        OCRPageSnapshot(
-          pageIndex: page.pageIndex,
-          text: targetContext.map(\.text).joined(separator: "\n"),
-          observations: targetContext
-        )
-      )
-
-      if observationIndex == page.observations.index(before: page.observations.endIndex),
-         pagePosition < sortedSnapshots.index(before: sortedSnapshots.endIndex),
-         let nextObservation = sortedSnapshots[pagePosition + 1].observations.first {
-        context.append(
-          OCRPageSnapshot(
-            pageIndex: sortedSnapshots[pagePosition + 1].pageIndex,
-            text: nextObservation.text,
-            observations: [nextObservation]
-          )
-        )
-      }
-
-      return context
-    }
-
-    return nil
   }
 
   private func pageScopedSnapshots(targetIndex: Int, snapshots: [OCRPageSnapshot]) -> [OCRPageSnapshot] {
