@@ -126,6 +126,10 @@ PowerShell で `AGENTS.md`、`HANDOFF.md`、`input` 配下の日本語資料な�
 
 複数ファイルを読む場合も、同じように `[Console]::OutputEncoding` と `-Encoding UTF8` を使う。文字化けした出力を根拠に判断しない。
 
+## 9. Windows環境前提
+
+このプロジェクトの作業環境はWindowsのみで、ローカルにMac/Xcode/Swiftビルド環境はない前提です。毎回 `xcodebuild` や `swift` の有無確認をしないでください。iOSビルド確認は、ユーザーが明示的に依頼した場合にGitHub ActionsまたはTestFlight前提で扱います。
+
 ---
 
 **この指針が機能している状態:** 不要な差分が減り、作り込みすぎによる手戻りが減り、実装後ではなく実装前に確認すべきことを確認できている。

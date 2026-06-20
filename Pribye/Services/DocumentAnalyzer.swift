@@ -76,20 +76,7 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
   private func analyzeWithFoundationModels(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
     let session = LanguageModelSession(
       model: .default,
-      instructions: """
-      あなたは学校・幼稚園などの配布プリントから、タスク管理アプリに登録するためのタスク一覧を作成するアシスタントです。
-      OCRで読み取った内容のみを根拠として、ユーザーが実際に行うタスクを抽出してください。
-      外部知識で内容を補完・推測してはいけません。
-      OCRの誤認識と思われる箇所は、OCR内の文脈から自然に補正できる場合のみ補正してください。不確かな場合は補正しないでください。
-      複数ページが渡された場合、タスク抽出対象は入力内で最初に表示されたPageのみとし、後続Pageは文脈理解のためだけに参照してください。
-      分類、場所、優先度、全文要約は作成しないでください。
-      ユーザーが一度の作業として実施できる内容を1タスクとし、同じ目的の連続した作業は1つにまとめてください。
-      細かな手順には分割せず、必要以上にタスク数を増やさないでください。
-      各タスクは15文字以内で簡潔に表現し、「〜してください」などの依頼表現は含めないでください。
-      時系列は維持してください。
-      日付はOCRから判断できる場合のみ yyyy-MM-dd 形式で返してください。不明な場合は設定しないでください。
-      根拠には、対応するOCR行の text を短くそのまま引用し、対応する observation ID を必ず指定してください。
-      """
+      instructions: Self.taskExtractionInstructions
     )
 
     let response = try await session.respond(
@@ -121,6 +108,27 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
     """
   }
   #endif
+
+  private static var taskExtractionInstructions: String {
+    let customPrompt = UserDefaults.standard.string(forKey: "developmentTaskExtractionPrompt")?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return customPrompt.isEmpty ? defaultTaskExtractionInstructions : customPrompt
+  }
+
+  static let defaultTaskExtractionInstructions = """
+  あなたは学校・幼稚園などの配布プリントから、タスク管理アプリに登録するためのタスク一覧を作成するアシスタントです。
+  OCRで読み取った内容のみを根拠として、ユーザーが実際に行うタスクを抽出してください。
+  外部知識で内容を補完・推測してはいけません。
+  OCRの誤認識と思われる箇所は、OCR内の文脈から自然に補正できる場合のみ補正してください。不確かな場合は補正しないでください。
+  複数ページが渡された場合、タスク抽出対象は入力内で最初に表示されたPageのみとし、後続Pageは文脈理解のためだけに参照してください。
+  分類、場所、優先度、全文要約は作成しないでください。
+  ユーザーが一度の作業として実施できる内容を1タスクとし、同じ目的の連続した作業は1つにまとめてください。
+  細かな手順には分割せず、必要以上にタスク数を増やさないでください。
+  各タスクは15文字以内で簡潔に表現し、「〜してください」などの依頼表現は含めないでください。
+  時系列は維持してください。
+  日付はOCRから判断できる場合のみ yyyy-MM-dd 形式で返してください。不明な場合は設定しないでください。
+  根拠には、対応するOCR行の text を短くそのまま引用し、対応する observation ID を必ず指定してください。
+  """
 }
 
 #if canImport(FoundationModels)

@@ -2,10 +2,10 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
-  @Environment(\.modelContext) private var modelContext
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
 
   @AppStorage("adsRemoved") private var adsRemoved = false
+  @AppStorage("developmentTaskExtractionPrompt") private var developmentTaskExtractionPrompt = ""
   @StateObject private var purchaseService = PurchaseService()
 
   private var csvText: String {
@@ -55,11 +55,22 @@ struct SettingsView: View {
         ShareLink(item: csvText) {
           Label("データのエクスポート（CSV）", systemImage: "square.and.arrow.up")
         }
-        Button {
-          SampleDataFactory.insertDemoDocument(into: modelContext)
-        } label: {
-          Label("デモデータを追加", systemImage: "sparkles")
+      }
+
+      Section("開発中") {
+        Text("タスク抽出プロンプト")
+          .font(.headline)
+        Text("空欄の場合は既定プロンプトを使います。App Store提出前にこの開発用入力欄は削除してください。")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+        TextEditor(text: $developmentTaskExtractionPrompt)
+          .frame(minHeight: 180)
+          .textInputAutocapitalization(.never)
+          .autocorrectionDisabled()
+        Button("既定プロンプトに戻す") {
+          developmentTaskExtractionPrompt = ""
         }
+        .disabled(developmentTaskExtractionPrompt.isEmpty)
       }
 
       Section("その他") {

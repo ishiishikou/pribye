@@ -9,6 +9,7 @@ enum ImageAssetError: Error {
   case assetNotFound
   case imageLoadFailed
   case correctionFailed
+  case deletionFailed
 }
 
 struct SavedImageAsset: Sendable {
@@ -78,6 +79,28 @@ struct ImageAssetService {
       return loadVerifiedLocalImage(filename: localImageFilename, imageHash: page.imageHash)
     }
     return await loadVerifiedImage(identifier: page.photoAssetIdentifier, imageHash: page.imageHash)
+  }
+
+  func deleteStoredImages(for document: DocumentRecord) async throws {
+    let photoIdentifiers = Set(
+      ([document.photoAssetIdentifier] + document.pages.map(\.photoAssetIdentifier))
+        .compactMap { $0 }
+    )
+    if !photoIdentifiers.isEmpty {
+      let status = await requestPhotoReadAccess()
+      guard status == .authorized || status == .limited else {
+        throw ImageAssetError.photoAccessDenied
+      }
+      try await Self.deletePhotoAssets(localIdentifiers: Array(photoIdentifiers))
+    }
+
+    let localFilenames = Set(
+      ([document.localImageFilename] + document.pages.map(\.localImageFilename))
+        .compactMap { $0 }
+    )
+    for filename in localFilenames {
+      try Self.deleteLocalImage(filename: filename)
+    }
   }
 
   private func loadVerifiedImage(identifier: String?, imageHash: String?) async -> ImageAssetStateResult {
@@ -186,6 +209,35 @@ struct ImageAssetService {
         continuation.resume(returning: data)
       }
     }
+  }
+
+  private nonisolated static func deletePhotoAssets(localIdentifiers: [String]) async throws {
+    let assets = PHAsset.fetchAssets(withLocalIdentifiers: localIdentifiers, options: nil)
+    guard assets.count > 0 else {
+      return
+    }
+
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      PHPhotoLibrary.shared().performChanges {
+        PHAssetChangeRequest.deleteAssets(assets)
+      } completionHandler: { success, error in
+        if let error {
+          continuation.resume(throwing: error)
+        } else if success {
+          continuation.resume()
+        } else {
+          continuation.resume(throwing: ImageAssetError.deletionFailed)
+        }
+      }
+    }
+  }
+
+  private nonisolated static func deleteLocalImage(filename: String) throws {
+    let fileURL = try localImageDirectory().appendingPathComponent(filename, isDirectory: false)
+    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+      return
+    }
+    try FileManager.default.removeItem(at: fileURL)
   }
 
   private nonisolated static func localImageDirectory() throws -> URL {

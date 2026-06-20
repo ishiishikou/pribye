@@ -2,7 +2,6 @@ import SwiftData
 import SwiftUI
 
 struct TaskListView: View {
-  @Environment(\.modelContext) private var modelContext
   @Environment(RouterPath.self) private var router
   @Query(sort: \ExtractedTaskRecord.createdAt, order: .reverse) private var tasks: [ExtractedTaskRecord]
   @State private var showingCompleted = false
@@ -68,14 +67,6 @@ struct TaskListView: View {
           Image(systemName: "plus")
         }
         .accessibilityLabel("プリントを撮影")
-      }
-      ToolbarItem(placement: .topBarLeading) {
-        Button {
-          SampleDataFactory.insertDemoDocument(into: modelContext)
-        } label: {
-          Image(systemName: "sparkles")
-        }
-        .accessibilityLabel("デモデータを追加")
       }
     }
   }

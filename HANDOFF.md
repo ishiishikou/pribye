@@ -131,7 +131,6 @@ GitHub Actions:
 - `Pribye/Services/CSVExporter.swift`
 - `Pribye/Services/ImageAssetService.swift`
 - `Pribye/Services/PurchaseService.swift`
-- `Pribye/Services/SampleDataFactory.swift`
 - `Pribye/Views/TaskListView.swift`
 - `Pribye/Views/PrintListView.swift`
 - `Pribye/Views/DetailViews.swift`
@@ -177,6 +176,8 @@ UI方針:
 - 広告はタスク一覧/プリント一覧の下部固定AdMob bannerのみ。SDK未解決時だけプレースホルダーにフォールバック
 - 撮影、補正、詳細画面には広告を表示しない
 - 解析開始後は撮影シートを閉じ、プリント一覧へ移動する。ユーザーは解析中に画面を離れてよい。
+- プリント一覧では `画像処理中`、`OCR中`、`AI解析中` の大まかな進捗を表示する。
+- デモデータ追加UIと `SampleDataFactory` は削除済み。
 
 ### サービス
 
@@ -190,6 +191,7 @@ UI方針:
   - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合はフォールバックせず、解析失敗として表示する
+  - 開発中は設定画面の `タスク抽出プロンプト` で instructions を上書きできる。空欄なら既定プロンプトを使う。App Store提出前にこの入力欄は削除する
 - `DocumentAnalysisPipeline`
   - 撮影後解析とプリント詳細からの再解析で共通利用するタスク抽出パイプライン
   - ページ単位解析、根拠行補正、タスク重複排除、`DocumentRecord` への反映を担当
@@ -209,6 +211,7 @@ UI方針:
   - アルバム選択由来の補正後画像は、二重保存を避けるためアプリ内部へ保存
   - Photos asset ID または内部保存ファイル名と画像ハッシュを保存
   - 元画像削除、写真アクセス拒否、画像変更検知
+  - プリント削除時に、ユーザー選択で保存画像も削除できる。写真ライブラリ上の画像とアプリ内部保存画像の両方を対象にする
 - `ImageProcessingService`
   - 四隅座標からCore Imageのperspective correctionを実行
 - `PurchaseService`
@@ -273,7 +276,7 @@ CIを通すために以下を修正済み:
 
 ### カメラ・四隅補正
 
-現在の撮影フローは、VisionKit書類スキャン、実機カメラ撮影フォールバック、`PhotosPicker`、デモデータ追加に対応しています。
+現在の撮影フローは、VisionKit書類スキャン、実機カメラ撮影フォールバック、`PhotosPicker` に対応しています。
 
 実装済み:
 
@@ -332,11 +335,13 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
 2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
-3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
-4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
-5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
-6. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
-7. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
+3. 開発中設定のタスク抽出プロンプト欄で、Foundation Modelsの抽出精度を実機調整する。
+4. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
+5. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
+6. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
+7. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
+8. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
+9. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
 
 ## 次チャットでの推奨依頼
 

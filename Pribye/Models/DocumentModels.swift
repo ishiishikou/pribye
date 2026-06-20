@@ -11,12 +11,25 @@ enum DocumentProcessingStatus: String, Codable, CaseIterable {
 
   var userLabel: String {
     switch self {
-    case .captured, .ocrProcessing, .aiProcessing:
-      return "解析中"
+    case .captured:
+      return "画像処理中"
+    case .ocrProcessing:
+      return "OCR中"
+    case .aiProcessing:
+      return "AI解析中"
     case .ready:
       return "タスク化済み"
     case .failed:
       return "解析失敗"
+    }
+  }
+
+  var isProcessing: Bool {
+    switch self {
+    case .captured, .ocrProcessing, .aiProcessing:
+      return true
+    case .ready, .failed:
+      return false
     }
   }
 }

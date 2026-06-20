@@ -2,8 +2,13 @@ import SwiftData
 import SwiftUI
 
 struct PrintListView: View {
+  @Environment(\.modelContext) private var modelContext
   @Environment(RouterPath.self) private var router
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
+  @State private var documentPendingDeletion: DocumentRecord?
+  @State private var deleteErrorMessage: String?
+
+  private let imageAssetService = ImageAssetService()
 
   var body: some View {
     Group {
@@ -25,6 +30,11 @@ struct PrintListView: View {
                 DocumentRowView(document: document)
               }
               .buttonStyle(.plain)
+              .swipeActions {
+                Button("削除", role: .destructive) {
+                  documentPendingDeletion = document
+                }
+              }
             }
           }
         }
@@ -43,6 +53,52 @@ struct PrintListView: View {
           Image(systemName: "camera")
         }
         .accessibilityLabel("プリントを撮影")
+      }
+    }
+    .confirmationDialog(
+      "プリントを削除しますか？",
+      isPresented: Binding(
+        get: { documentPendingDeletion != nil },
+        set: { if !$0 { documentPendingDeletion = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      Button("プリントだけ削除", role: .destructive) {
+        deletePendingDocument(deleteImages: false)
+      }
+      Button("プリントと保存画像を削除", role: .destructive) {
+        deletePendingDocument(deleteImages: true)
+      }
+      Button("キャンセル", role: .cancel) {
+        documentPendingDeletion = nil
+      }
+    } message: {
+      Text("保存画像を削除すると、写真ライブラリやアプリ内部に保存した補正後画像も削除します。")
+    }
+    .alert("削除できませんでした", isPresented: Binding(
+      get: { deleteErrorMessage != nil },
+      set: { if !$0 { deleteErrorMessage = nil } }
+    )) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(deleteErrorMessage ?? "")
+    }
+  }
+
+  private func deletePendingDocument(deleteImages: Bool) {
+    guard let document = documentPendingDeletion else {
+      return
+    }
+    documentPendingDeletion = nil
+
+    Task { @MainActor in
+      do {
+        if deleteImages {
+          try await imageAssetService.deleteStoredImages(for: document)
+        }
+        modelContext.delete(document)
+      } catch {
+        deleteErrorMessage = "写真アクセス権限または画像削除処理を確認してください。"
       }
     }
   }
@@ -67,10 +123,16 @@ struct DocumentRowView: View {
       }
 
       Spacer()
-      StatusPill(
-        text: document.status.userLabel,
-        color: document.status == .failed ? .red : .blue
-      )
+      HStack(spacing: 6) {
+        if document.status.isProcessing {
+          ProgressView()
+            .controlSize(.small)
+        }
+        StatusPill(
+          text: document.status.userLabel,
+          color: document.status == .failed ? .red : .blue
+        )
+      }
     }
     .padding(.vertical, 6)
   }

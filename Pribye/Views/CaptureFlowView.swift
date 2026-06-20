@@ -123,15 +123,6 @@ struct CaptureFlowView: View {
       }
       .buttonStyle(.bordered)
 
-      Button {
-        SampleDataFactory.insertDemoDocument(into: modelContext)
-        dismiss()
-      } label: {
-        Label("デモプリントを追加", systemImage: "sparkles")
-          .frame(maxWidth: .infinity)
-      }
-      .buttonStyle(.bordered)
-
       Text("写真・OCR・AI結果は外部AI APIへ送信しません。写真から選んだ画像は写真ライブラリへ再保存しません。")
         .font(.footnote)
         .foregroundStyle(.secondary)
@@ -280,7 +271,7 @@ struct CaptureFlowView: View {
 
   @MainActor
   private func beginAnalysisAndDismiss(_ pages: [CapturedPageImage]) {
-    let document = DocumentRecord(status: .ocrProcessing)
+    let document = DocumentRecord(status: .captured)
     modelContext.insert(document)
     dismiss()
     onAnalysisStarted()
@@ -296,6 +287,7 @@ struct CaptureFlowView: View {
       var rawSnapshots: [OCRPageSnapshot] = []
 
       for (pageIndex, capturedPage) in pages.enumerated() {
+        document.status = .captured
         let correctedImage = try imageProcessingService.correctPerspective(
           image: capturedPage.image.normalizedForProcessing(),
           corners: capturedPage.cropCorners
@@ -312,6 +304,7 @@ struct CaptureFlowView: View {
           document.imageHash = imageReference.imageHash
         }
 
+        document.status = .ocrProcessing
         let ocr = try await ocrService.recognizeText(in: correctedImage)
         let page = PageRecord(pageIndex: pageIndex, ocrText: ocr.text)
         page.photoAssetIdentifier = imageReference.photoAssetIdentifier

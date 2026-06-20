@@ -133,12 +133,16 @@ struct DocumentDetailLookupView: View {
 }
 
 struct DocumentDetailView: View {
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
   @Environment(RouterPath.self) private var router
   @Bindable var document: DocumentRecord
   @State private var isReanalyzing = false
+  @State private var isShowingDeleteConfirmation = false
+  @State private var deleteErrorMessage: String?
 
   private let analysisPipeline = DocumentAnalysisPipeline()
+  private let imageAssetService = ImageAssetService()
 
   var body: some View {
     List {
@@ -237,6 +241,39 @@ struct DocumentDetailView: View {
     }
     .navigationTitle("プリント詳細")
     .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        Button(role: .destructive) {
+          isShowingDeleteConfirmation = true
+        } label: {
+          Image(systemName: "trash")
+        }
+        .accessibilityLabel("プリントを削除")
+      }
+    }
+    .confirmationDialog(
+      "プリントを削除しますか？",
+      isPresented: $isShowingDeleteConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("プリントだけ削除", role: .destructive) {
+        Task { await deleteDocument(deleteImages: false) }
+      }
+      Button("プリントと保存画像を削除", role: .destructive) {
+        Task { await deleteDocument(deleteImages: true) }
+      }
+      Button("キャンセル", role: .cancel) {}
+    } message: {
+      Text("保存画像を削除すると、写真ライブラリやアプリ内部に保存した補正後画像も削除します。")
+    }
+    .alert("削除できませんでした", isPresented: Binding(
+      get: { deleteErrorMessage != nil },
+      set: { if !$0 { deleteErrorMessage = nil } }
+    )) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(deleteErrorMessage ?? "")
+    }
   }
 
   @MainActor
@@ -274,6 +311,19 @@ struct DocumentDetailView: View {
     } catch {
       document.status = .failed
       document.failureReason = .unknownError
+    }
+  }
+
+  @MainActor
+  private func deleteDocument(deleteImages: Bool) async {
+    do {
+      if deleteImages {
+        try await imageAssetService.deleteStoredImages(for: document)
+      }
+      modelContext.delete(document)
+      dismiss()
+    } catch {
+      deleteErrorMessage = "写真アクセス権限または画像削除処理を確認してください。"
     }
   }
 }

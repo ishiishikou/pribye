@@ -38,6 +38,8 @@
 
 ## Prompt 要件
 
+開発中は設定画面の `タスク抽出プロンプト` に入力すると、`FoundationModelsDocumentAnalyzer` の instructions を上書きできます。空欄の場合はアプリ内の既定プロンプトを使います。この入力欄はApp Store提出前に削除してください。
+
 抽出対象:
 
 - プリント名
