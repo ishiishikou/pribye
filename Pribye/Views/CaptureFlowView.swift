@@ -104,10 +104,10 @@ struct CaptureFlowView: View {
         .font(.title2.weight(.bold))
 
       Button {
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-          isShowingCamera = true
-        } else if VNDocumentCameraViewController.isSupported {
+        if VNDocumentCameraViewController.isSupported {
           isShowingDocumentScanner = true
+        } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
+          isShowingCamera = true
         } else {
           step = .failed("この端末ではカメラを利用できません")
         }
@@ -216,8 +216,15 @@ struct CaptureFlowView: View {
       return
     }
 
-    setCapturedPages(images, initialCropCorners: fullCropCorners(), source: .documentScanner)
+    let pages = images.map {
+      CapturedPageImage(
+        image: $0.normalizedForProcessing(),
+        cropCorners: fullCropCorners(),
+        source: .documentScanner
+      )
+    }
     selectedItem = nil
+    beginAnalysisAndDismiss(pages)
   }
 
   @MainActor
@@ -268,7 +275,11 @@ struct CaptureFlowView: View {
       return
     }
 
-    let pages = capturedPages
+    beginAnalysisAndDismiss(capturedPages)
+  }
+
+  @MainActor
+  private func beginAnalysisAndDismiss(_ pages: [CapturedPageImage]) {
     let document = DocumentRecord(status: .ocrProcessing)
     modelContext.insert(document)
     dismiss()
@@ -389,7 +400,7 @@ struct CaptureFlowView: View {
   private func cropInstructionText(for page: CapturedPageImage) -> String {
     switch page.source {
     case .documentScanner:
-      return "標準スキャン後の画像範囲で四隅を微調整できます。元の撮影範囲から選びたい場合はカメラ撮影を使います。"
+      return "VisionKitの標準スキャンでは、四隅調整も標準UIに任せます。"
     case .camera, .photoLibrary:
       return "四隅を合わせてから解析へ進みます。上部で選択中の角を拡大確認できます。"
     }

@@ -273,16 +273,16 @@ CIを通すために以下を修正済み:
 
 ### カメラ・四隅補正
 
-現在の撮影フローは、実機カメラ撮影、VisionKit書類スキャンフォールバック、`PhotosPicker`、デモデータ追加に対応しています。
+現在の撮影フローは、VisionKit書類スキャン、実機カメラ撮影フォールバック、`PhotosPicker`、デモデータ追加に対応しています。
 
 実装済み:
 
-- `UIImagePickerController` による実機カメラ撮影。未補正画像をアプリ側の四隅選択に渡す
-- 実機カメラが使えない場合のみ、`VisionKit` / `VNDocumentCameraViewController` による標準書類スキャンへフォールバック
+- `VisionKit` / `VNDocumentCameraViewController` による標準書類スキャン。自動書類検出、自動撮影、連続撮影、四隅調整、台形補正は標準UIに任せる
+- `UIImagePickerController` による実機カメラ撮影フォールバック。未補正画像をアプリ側の四隅選択に渡す
 - `VNDocumentCameraScan` が返す複数ページを1プリント内の複数 `PageRecord` として保持
-- 四隅ドラッグ操作
-- 選択中頂点と接続線の拡大確認
-- VisionKit書類スキャンは標準UIが補正後画像だけを返すため、四隅選択はその画像範囲内の微調整になる。元の撮影範囲から四隅を選ぶ経路は実機カメラ撮影を使う
+- カメラ/写真選択向けの四隅ドラッグ操作
+- カメラ/写真選択向けの選択中頂点と接続線の拡大確認
+- VisionKit標準スキャンUIの四隅調整だけを独自UIに差し替える公開APIはないため、VisionKit経路では独自四隅調整画面を挟まない
 - VisionKit標準スキャンUIが日本語リソースを選ぶよう、アプリの開発言語/ローカライズは日本語に設定
 - Core Image `CIPerspectiveCorrection` による補正後画像生成
 - カメラ/書類スキャン由来の補正後画像は写真ライブラリへ保存
@@ -331,7 +331,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 優先度順:
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightで実機カメラ撮影、VisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
+2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
 3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
 4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。

@@ -6,6 +6,7 @@
 
 - 書類撮影: `VisionKit` の `VNDocumentCameraViewController` を採用。自動書類検出、撮影、台形補正は標準UIに任せる。
 - 複数ページ書類スキャン: `VNDocumentCameraScan` から全ページを取り込み、1プリント内の複数 `Page` として保持する。
+- VisionKitの四隅調整UIだけを独自UIへ差し替える公開APIはないため、VisionKit経路では標準UIだけを使う。
 - ページ単位解析: AIタスク抽出は一括全文投入ではなく、対象ページ + 次ページ冒頭の文脈でページごとに実行する。
 - 写真選択: `PhotosPicker` を継続。
 - OCR: `Vision` の `VNRecognizeTextRequest` を継続。

@@ -24,7 +24,7 @@
 - Archive and upload the first build.
 - Prepare distribution signing for CI or use Xcode Organizer on a Mac.
 - If using CI upload, create an App Store Connect API key and store signing assets in GitHub Actions secrets.
-- Verify VisionKit multi-page document scanning, page switching during correction, OCR, page-scoped task extraction, task completion, calendar registration, and CSV export.
+- Verify VisionKit multi-page document scanning, camera/photo correction, OCR, page-scoped task extraction, task completion, calendar registration, and CSV export.
 - Verify permission prompts for Camera, Photos, and Calendar on a real device.
 - Verify Foundation Models integration and Apple Intelligence unavailable guidance using `docs/FOUNDATION_MODELS_SETUP.md`.
 
