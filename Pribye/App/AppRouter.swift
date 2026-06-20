@@ -3,6 +3,7 @@ import SwiftUI
 enum AppTab: String, CaseIterable, Identifiable {
   case tasks
   case prints
+  case aiExperiment
   case settings
 
   var id: String { rawValue }
@@ -15,6 +16,8 @@ enum AppTab: String, CaseIterable, Identifiable {
       TaskListView()
     case .prints:
       PrintListView()
+    case .aiExperiment:
+      AIExperimentView()
     case .settings:
       SettingsView()
     }
@@ -27,6 +30,8 @@ enum AppTab: String, CaseIterable, Identifiable {
       Label("タスク", systemImage: "checklist")
     case .prints:
       Label("プリント", systemImage: "doc.text")
+    case .aiExperiment:
+      Label("AI実験", systemImage: "bubble.left.and.text.bubble.right")
     case .settings:
       Label("設定", systemImage: "gearshape")
     }

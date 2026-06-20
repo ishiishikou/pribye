@@ -126,6 +126,7 @@ GitHub Actions:
 - `Pribye/Models/DocumentModels.swift`
 - `Pribye/Services/DateRangeParser.swift`
 - `Pribye/Services/DocumentAnalyzer.swift`
+- `Pribye/Services/AppleIntelligenceChatService.swift`
 - `Pribye/Services/OCRService.swift`
 - `Pribye/Services/CalendarService.swift`
 - `Pribye/Services/CSVExporter.swift`
@@ -133,6 +134,7 @@ GitHub Actions:
 - `Pribye/Services/PurchaseService.swift`
 - `Pribye/Views/TaskListView.swift`
 - `Pribye/Views/PrintListView.swift`
+- `Pribye/Views/AIExperimentView.swift`
 - `Pribye/Views/DetailViews.swift`
 - `Pribye/Views/CaptureFlowView.swift`
 - `Pribye/Views/CameraImagePicker.swift`
@@ -171,13 +173,14 @@ GitHub Actions:
 
 UI方針:
 
-- `TabView` は `タスク / プリント / 設定`
+- `TabView` は `タスク / プリント / AI実験 / 設定`
 - 撮影はシートで表示
 - 広告はタスク一覧/プリント一覧の下部固定AdMob bannerのみ。SDK未解決時だけプレースホルダーにフォールバック
 - 撮影、補正、詳細画面には広告を表示しない
 - 解析開始後は撮影シートを閉じ、プリント一覧へ移動する。ユーザーは解析中に画面を離れてよい。
 - プリント一覧では `画像処理中`、`OCR中`、`AI解析中` の大まかな進捗を表示する。
 - デモデータ追加UIと `SampleDataFactory` は削除済み。
+- `AI実験` タブは開発用。プロンプトとOCR文章を手入力し、Apple Intelligenceの自由応答を確認できる。本番のタスク抽出・保存済みプリント・タスク生成には接続しない。App Store提出前に削除する。
 
 ### サービス
 
@@ -191,7 +194,11 @@ UI方針:
   - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合はフォールバックせず、解析失敗として表示する
-  - 開発中は設定画面の `タスク抽出プロンプト` で instructions を上書きできる。空欄なら既定プロンプトを使う。App Store提出前にこの入力欄は削除する
+  - 開発中は設定画面の `タスク抽出プロンプト` で instructions を上書きできる。入力欄には既定プロンプト本文を初期表示し、編集内容が本番解析に使われる。App Store提出前にこの入力欄は削除する
+- `AppleIntelligenceChatService`
+  - 開発用 `AI実験` タブ専用。`LanguageModelSession` の自由応答で、プロンプト + OCR文章に対するApple Intelligenceの回答を確認する
+  - structured generation、JSON生成、タスク保存、OCR補正、既存解析パイプラインには接続しない
+  - Apple Intelligence利用不可時はフォールバックせず、オンにする案内を表示する
 - `DocumentAnalysisPipeline`
   - 撮影後解析とプリント詳細からの再解析で共通利用するタスク抽出パイプライン
   - ページ単位解析、根拠行補正、タスク重複排除、`DocumentRecord` への反映を担当
@@ -230,6 +237,7 @@ UI方針:
 
 - 日付/期間パース
 - Foundation Models利用不可時に解析失敗になること
+- Apple Intelligence自由応答サービスの空入力と利用不可時エラー
 - タスク完了状態とライフサイクル
 - Document状態表示
 - 四隅補正座標の保存
@@ -335,13 +343,14 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
 2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
-3. 開発中設定のタスク抽出プロンプト欄で、Foundation Modelsの抽出精度を実機調整する。
-4. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
-5. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
-6. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
-7. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
-8. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
-9. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
+3. `AI実験` タブでプロンプトとOCR文章を入力し、Apple Intelligenceの自由応答を実機確認する。
+4. 開発中設定のタスク抽出プロンプト欄で、Foundation Modelsの抽出精度を実機調整する。
+5. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
+6. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
+7. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
+8. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
+9. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
+10. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
 
 ## 次チャットでの推奨依頼
 

@@ -5,7 +5,7 @@ struct SettingsView: View {
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
 
   @AppStorage("adsRemoved") private var adsRemoved = false
-  @AppStorage("developmentTaskExtractionPrompt") private var developmentTaskExtractionPrompt = ""
+  @AppStorage("developmentTaskExtractionPrompt") private var developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
   @StateObject private var purchaseService = PurchaseService()
 
   private var csvText: String {
@@ -60,7 +60,7 @@ struct SettingsView: View {
       Section("開発中") {
         Text("タスク抽出プロンプト")
           .font(.headline)
-        Text("空欄の場合は既定プロンプトを使います。App Store提出前にこの開発用入力欄は削除してください。")
+        Text("現在の本番解析に使われるプロンプトです。App Store提出前にこの開発用入力欄は削除してください。")
           .font(.footnote)
           .foregroundStyle(.secondary)
         TextEditor(text: $developmentTaskExtractionPrompt)
@@ -68,9 +68,9 @@ struct SettingsView: View {
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
         Button("既定プロンプトに戻す") {
-          developmentTaskExtractionPrompt = ""
+          developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
         }
-        .disabled(developmentTaskExtractionPrompt.isEmpty)
+        .disabled(developmentTaskExtractionPrompt == FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions)
       }
 
       Section("その他") {
@@ -91,6 +91,9 @@ struct SettingsView: View {
     }
     .navigationTitle("設定")
     .task {
+      if developmentTaskExtractionPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        developmentTaskExtractionPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
+      }
       await purchaseService.loadRemoveAdsProduct()
       adsRemoved = await purchaseService.refreshEntitlement()
       for await isRemoved in purchaseService.updatedRemoveAdsEntitlements() {
