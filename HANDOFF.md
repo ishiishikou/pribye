@@ -148,10 +148,10 @@ GitHub Actions:
 
 - `DocumentRecord`
   - プリント単位
-  - 処理状態、ライフサイクル、写真アセットID、画像ハッシュ、サムネイル、OCR全文を保持
+  - 処理状態、ライフサイクル、代表写真アセットID、画像ハッシュ、サムネイル、全ページOCR全文を保持
 - `PageRecord`
   - 複数ページ対応
-  - OCRテキスト、四隅補正座標を保持
+  - ページごとの写真アセットID、画像ハッシュ、OCRテキスト、AI補正後OCRテキスト、四隅補正座標を保持
 - `OCRObservationRecord`
   - OCR行、信頼度、座標を保持
 - `ExtractedTaskRecord`
@@ -188,9 +188,11 @@ UI方針:
   - AI抽出境界
 - `FoundationModelsDocumentAnalyzer`
   - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
+  - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は `HeuristicDocumentAnalyzer` へフォールバック
 - `FoundationModelsOCRTextCorrector`
   - `FoundationModels` framework が利用できる場合、OCR後・タスク抽出前に明らかなOCR誤認だけをオンデバイス補正
+  - 複数ページプリントでは、対象ページ + 次ページ冒頭の文脈でページ単位補正する
   - 補正失敗、Apple Intelligence利用不可、モデル未準備の場合は元OCRテキストをそのまま利用
 - `HeuristicDocumentAnalyzer`
   - OCRテキストから期限/期間と行動らしい文を簡易抽出
@@ -267,6 +269,7 @@ CIを通すために以下を修正済み:
 実装済み:
 
 - `VisionKit` / `VNDocumentCameraViewController` による標準書類スキャン
+- `VNDocumentCameraScan` が返す複数ページを1プリント内の複数 `PageRecord` として保持
 - `UIImagePickerController` による実機カメラ撮影フォールバック
 - 四隅ドラッグ操作
 - 選択中頂点と接続線の拡大確認
@@ -278,7 +281,7 @@ CIを通すために以下を修正済み:
 
 注意:
 
-- OCR座標とハイライト画像の座標系を一致させるため、Documentに紐づけるPhotos assetは補正後画像です。
+- OCR座標とハイライト画像の座標系を一致させるため、Pageに紐づけるPhotos assetはページごとの補正後画像です。DocumentのPhotos assetは代表画像として1ページ目を指します。
 - Photos保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
 - `PHPhotoLibrary` / `PHImageManager` の completion handler はMainActor上で直接定義しない。Swift 6のactor isolation runtime checkで実機クラッシュする可能性があるため、Photos callback は nonisolated helper に閉じ込める。
 - Windows環境ではVisionKit書類スキャン、実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
@@ -316,7 +319,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 優先度順:
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightでVisionKit書類スキャン、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを確認する。
+2. TestFlightでVisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの写真保存、画像ハッシュ、根拠ハイライトを確認する。
 3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
 4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。

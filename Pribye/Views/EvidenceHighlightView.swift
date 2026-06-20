@@ -34,7 +34,7 @@ struct EvidenceHighlightView: View {
   }
 
   private var highlightedObservations: [OCRObservationRecord] {
-    let observations = document.pages.flatMap(\.observations)
+    let observations = highlightedPage?.observations ?? document.pages.flatMap(\.observations)
     if let evidenceObservationID = task.evidenceObservationID,
        let observation = observations.first(where: { $0.id == evidenceObservationID }) {
       return [observation]
@@ -47,12 +47,33 @@ struct EvidenceHighlightView: View {
     }
   }
 
+  private var highlightedPage: PageRecord? {
+    if let evidenceObservationID = task.evidenceObservationID {
+      return document.pages.first { page in
+        page.observations.contains { $0.id == evidenceObservationID }
+      }
+    }
+    guard !task.evidenceText.isEmpty else {
+      return nil
+    }
+    return document.pages.first { page in
+      page.observations.contains {
+        task.evidenceText.contains($0.text) || $0.text.contains(task.evidenceText)
+      }
+    }
+  }
+
   @MainActor
   private func loadImage() async {
     isLoading = true
     defer { isLoading = false }
 
-    let result = await imageAssetService.loadVerifiedImage(for: document)
+    let result: ImageAssetStateResult
+    if let highlightedPage {
+      result = await imageAssetService.loadVerifiedImage(for: highlightedPage)
+    } else {
+      result = await imageAssetService.loadVerifiedImage(for: document)
+    }
     sourceImage = result.image
     sourceState = result.state
     document.sourceImageState = result.state

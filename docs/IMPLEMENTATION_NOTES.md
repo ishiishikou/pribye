@@ -4,7 +4,8 @@
 
 - 「確認を毎回必須にしない」と「AI結果確認画面」は、設定 `showReviewAfterAnalysis` で両立する。初期値は確認画面を開くが、ユーザーが不要と判断したら解析後に自動保存へ切り替えられる。
 - 「ローカル処理」と「広告」は、プリント画像・OCR・タスク内容を広告SDKへ渡さないことで境界を引く。広告通信自体はApp Storeのプライバシー申告対象として扱う。
-- 「写真ライブラリのみ」と「根拠ハイライト」は、アプリ内にサムネイル・画像ハッシュ・OCR座標だけを保存し、補正後画像のPhotos assetが消えた場合はハイライト不可にする。
+- 「写真ライブラリのみ」と「根拠ハイライト」は、アプリ内にサムネイル・ページごとの画像ハッシュ・OCR座標だけを保存し、該当ページの補正後画像Photos assetが消えた場合はハイライト不可にする。
+- 「複数ページ撮影」と「長文によるAI精度低下防止」は、1プリントに複数 `Page` を持たせ、タスク抽出を対象ページ + 次ページ冒頭の文脈でページ単位実行することで両立する。
 - 「Apple Intelligence対応端末のみ」は、iOS 26以上をdeployment targetにし、AI可用性は `AppleIntelligenceAvailability` で集約する。
 
 ## Foundation Models
@@ -12,6 +13,8 @@
 `DocumentAnalyzer` はプロトコルで分離済み。`FoundationModelsDocumentAnalyzer` はFoundation Models接続の唯一の境界です。
 
 `canImport(FoundationModels)` かつ `SystemLanguageModel.default.isAvailable` の場合は `LanguageModelSession` のstructured generationを使う。SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は、CIとWindows編集環境で安全に動かすため `HeuristicDocumentAnalyzer` にフォールバックする。
+
+複数ページプリントでは、全ページを一括でタスク抽出へ渡さない。ページごとに対象ページを先頭にし、次ページ冒頭のOCR行だけを文脈として付ける。
 
 実機またはGitHub ActionsのXcode 26環境でコンパイルと実機動作を確認する。確認手順は `docs/FOUNDATION_MODELS_SETUP.md` を参照する。
 

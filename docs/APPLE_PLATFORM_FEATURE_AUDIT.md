@@ -5,6 +5,8 @@
 ## 採用済み・今回採用
 
 - 書類撮影: `VisionKit` の `VNDocumentCameraViewController` を採用。自動書類検出、撮影、台形補正は標準UIに任せる。
+- 複数ページ書類スキャン: `VNDocumentCameraScan` から全ページを取り込み、1プリント内の複数 `Page` として保持する。
+- ページ単位解析: AIタスク抽出は一括全文投入ではなく、対象ページ + 次ページ冒頭の文脈でページごとに実行する。
 - 写真選択: `PhotosPicker` を継続。
 - OCR: `Vision` の `VNRecognizeTextRequest` を継続。
 - OCR補正・タスク抽出: `FoundationModels` が使える端末ではオンデバイスで実行し、外部AI APIへ画像/OCR/抽出結果を送らない。
@@ -14,20 +16,15 @@
 
 ## 次に検討する価値があるもの
 
-1. 複数ページ書類スキャン
-   - `VNDocumentCameraScan` は複数ページを返せる。
-   - 現在の撮影フローは1ページ目だけを既存の補正/OCRへ流す。
-   - 複数ページ一括解析を入れる場合は、確認画面、画像保存、OCR進捗表示も複数ページ前提にする。
-
-2. App Intents / App Shortcuts
+1. App Intents / App Shortcuts
    - 「今日の持ち物を見る」「未完了タスクを開く」などをSiri、ショートカット、Spotlightへ出せる。
    - App Store初期版では必須ではないが、タスク中心アプリとの相性はよい。
 
-3. EventKitUI
+2. EventKitUI
    - カレンダー登録を標準のイベント編集画面に寄せられる。
    - 現状の自動登録より、ユーザーが通知やカレンダーを確認して保存できるメリットがある。
 
-4. UserNotifications
+3. UserNotifications
    - アプリ内タスクの期限通知をローカル通知で出せる。
    - 通知許可、通知タイミング、広告非表示課金との関係を設計してから入れる。
 

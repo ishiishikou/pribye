@@ -185,6 +185,27 @@ struct DocumentDetailView: View {
         if document.ocrText.isEmpty {
           Text("OCR結果はありません")
             .foregroundStyle(.secondary)
+        } else if !document.pages.isEmpty {
+          ForEach(document.pages.sorted { $0.pageIndex < $1.pageIndex }) { page in
+            VStack(alignment: .leading, spacing: 6) {
+              Text("ページ\(page.pageIndex + 1)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+              if let correctedOCRText = page.correctedOCRText, correctedOCRText != page.ocrText {
+                Text("AI補正後")
+                  .font(.caption2.weight(.semibold))
+                  .foregroundStyle(.secondary)
+                Text(correctedOCRText)
+                  .font(.callout)
+                Text("元のOCR")
+                  .font(.caption2.weight(.semibold))
+                  .foregroundStyle(.secondary)
+              }
+              Text(page.ocrText)
+                .font(.callout)
+            }
+            .padding(.vertical, 4)
+          }
         } else {
           if let correctedOCRText = document.correctedOCRText, correctedOCRText != document.ocrText {
             Text("AI補正後")

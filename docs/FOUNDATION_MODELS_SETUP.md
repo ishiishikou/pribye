@@ -1,13 +1,15 @@
 # Foundation Models Setup
 
-`FoundationModelsDocumentAnalyzer` は Foundation Models 実APIへ接続済みです。`FoundationModels` framework が解決でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` を使います。SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は CI と Windows 編集環境で安全に動かすため、`HeuristicDocumentAnalyzer` へフォールバックします。
+`FoundationModelsDocumentAnalyzer` と `FoundationModelsOCRTextCorrector` は Foundation Models 実APIへ接続済みです。`FoundationModels` framework が解決でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` を使います。SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は CI と Windows 編集環境で安全に動かすため、タスク抽出は `HeuristicDocumentAnalyzer` へフォールバックし、OCR補正は元OCRをそのまま使います。
 
 ## 実装対象
 
 更新する場所:
 
 - `Pribye/Services/DocumentAnalyzer.swift`
+- `Pribye/Services/OCRTextCorrector.swift`
 - `FoundationModelsDocumentAnalyzer.analyze(pages:)`
+- `FoundationModelsOCRTextCorrector.correct(pages:)`
 
 変更しない境界:
 
@@ -30,8 +32,9 @@
 1. Xcode 26 で `FoundationModels` のコンパイルが通ることを確認する。
 2. Apple Intelligence対応実機で `SystemLanguageModel.default.isAvailable` がtrueになることを確認する。
 3. 入力は OCR テキストと観測行IDだけにする。画像そのものはモデルへ渡さない。
-4. 返却形式は `AnalysisResult` に正規化する。
-5. 実APIが利用不可の場合のフォールバック挙動がユーザー体験上問題ないか確認する。
+4. 複数ページプリントでは、全ページ一括ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する。
+5. 返却形式は `AnalysisResult` に正規化する。
+6. 実APIが利用不可の場合のフォールバック挙動がユーザー体験上問題ないか確認する。
 
 ## Prompt 要件
 
@@ -42,6 +45,12 @@
 - 期限または期間
 - 根拠テキスト
 - 根拠に対応する OCR observation ID
+
+OCR補正:
+
+- 明らかなOCR誤認だけを補正する
+- 元OCRにない内容を追加しない
+- observation ID と行の対応を維持する
 
 抽出しない:
 
@@ -61,6 +70,8 @@
 - 期限行からタスクが作られる。
 - 期間行から開始日/終了日つきタスクが作られる。
 - 根拠ハイライトが該当行に重なる。
+- 複数ページスキャンで、2ページ目以降の根拠ハイライトが該当ページ画像に重なる。
+- OCR誤認例（例: `2タ` -> `フタ`）が補正され、元OCRも詳細画面で確認できる。
 - モデル出力が空の場合、解析失敗UIから再解析/手動登録へ進める。
 - Apple Intelligence が使えない端末でクラッシュしない。
 

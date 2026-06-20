@@ -82,6 +82,7 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
       instructions: """
       あなたは学校・幼稚園などの配布プリントから、ユーザーが行動すべき最小限のタスクだけを抽出します。
       外部知識で補完せず、OCR入力に含まれる内容だけを使ってください。
+      複数ページが渡された場合、入力内で最初に表示されたPageだけをタスク抽出対象にし、後続Pageは文脈としてのみ参照してください。
       分類、場所、優先度、全文要約は作らないでください。
       日付は分かる場合だけ yyyy-MM-dd で返してください。
       根拠はOCR行の text をそのまま短く返し、対応する observation ID を必ず選んでください。
@@ -117,6 +118,7 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
     今日の日付: \(today)
 
     次のOCR行から、提出、持参、申込、準備、検温、支払い、参加など、ユーザーが行動すべきタスクだけを抽出してください。
+    複数ページが渡された場合、入力内で最初に表示されたPageだけをタスク抽出対象にし、後続Pageは前後の文脈としてのみ使ってください。
 
     期間がある場合:
     - dueStart に開始日

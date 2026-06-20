@@ -12,6 +12,12 @@ enum CaptureStep {
   case failed(String)
 }
 
+struct CapturedPageImage: Identifiable {
+  let id = UUID()
+  var image: UIImage
+  var cropCorners: [CGPoint] = CropPreview.defaultCorners
+}
+
 struct CaptureFlowView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
@@ -19,8 +25,8 @@ struct CaptureFlowView: View {
 
   @State private var step: CaptureStep = .input
   @State private var selectedItem: PhotosPickerItem?
-  @State private var selectedImage: UIImage?
-  @State private var cropCorners = CropPreview.defaultCorners
+  @State private var capturedPages: [CapturedPageImage] = []
+  @State private var selectedPageIndex = 0
   @State private var isShowingDocumentScanner = false
   @State private var isShowingCamera = false
   @State private var createdDocument: DocumentRecord?
@@ -76,10 +82,8 @@ struct CaptureFlowView: View {
     }
     .fullScreenCover(isPresented: $isShowingCamera) {
       CameraImagePicker { image in
-        selectedImage = image
+        setCapturedPages([image])
         selectedItem = nil
-        cropCorners = CropPreview.defaultCorners
-        step = .correction
         isShowingCamera = false
       } onCancel: {
         isShowingCamera = false
@@ -136,8 +140,21 @@ struct CaptureFlowView: View {
 
   private var correctionView: some View {
     VStack(spacing: 16) {
-      if let selectedImage {
-        CropPreview(image: selectedImage, corners: $cropCorners)
+      if capturedPages.count > 1 {
+        Picker("ページ", selection: $selectedPageIndex) {
+          ForEach(capturedPages.indices, id: \.self) { index in
+            Text("\(index + 1)").tag(index)
+          }
+        }
+        .pickerStyle(.segmented)
+      }
+
+      if let selectedPage {
+        Text("\(selectedPageIndex + 1) / \(capturedPages.count)ページ")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+
+        CropPreview(image: selectedPage.image, corners: selectedPageCorners)
           .frame(maxHeight: 520)
       }
 
@@ -204,85 +221,128 @@ struct CaptureFlowView: View {
       step = .failed("画像を読み込めませんでした")
       return
     }
-    let normalized = image.normalizedForProcessing()
-    selectedImage = normalized
-    cropCorners = CropPreview.defaultCorners
-    step = .correction
+    setCapturedPages([image])
   }
 
   @MainActor
   private func useScannedImages(_ images: [UIImage]) {
-    guard let image = images.first else {
+    guard !images.isEmpty else {
       step = .failed("スキャン画像を読み込めませんでした")
       return
     }
 
-    selectedImage = image.normalizedForProcessing()
+    setCapturedPages(images)
     selectedItem = nil
-    cropCorners = CropPreview.defaultCorners
-    step = .correction
+  }
+
+  @MainActor
+  private func setCapturedPages(_ images: [UIImage]) {
+    capturedPages = images.map { CapturedPageImage(image: $0.normalizedForProcessing()) }
+    selectedPageIndex = 0
+    step = capturedPages.isEmpty ? .failed("画像を読み込めませんでした") : .correction
+  }
+
+  private var selectedPage: CapturedPageImage? {
+    guard capturedPages.indices.contains(selectedPageIndex) else {
+      return nil
+    }
+    return capturedPages[selectedPageIndex]
+  }
+
+  private var selectedPageCorners: Binding<[CGPoint]> {
+    Binding(
+      get: {
+        guard capturedPages.indices.contains(selectedPageIndex) else {
+          return CropPreview.defaultCorners
+        }
+        return capturedPages[selectedPageIndex].cropCorners
+      },
+      set: { newValue in
+        guard capturedPages.indices.contains(selectedPageIndex) else {
+          return
+        }
+        capturedPages[selectedPageIndex].cropCorners = newValue
+      }
+    )
   }
 
   @MainActor
   private func analyzeSelectedImage() async {
-    guard let selectedImage else {
+    guard !capturedPages.isEmpty else {
       step = .failed("画像が選択されていません")
       return
     }
 
     step = .analyzing
-    let originalImage = selectedImage.normalizedForProcessing()
-    let correctedImage: UIImage
-    do {
-      correctedImage = try imageProcessingService.correctPerspective(image: originalImage, corners: cropCorners)
-    } catch {
-      step = .failed("画像補正に失敗しました")
-      return
-    }
-
     let document = DocumentRecord(status: .ocrProcessing)
-    document.thumbnailData = correctedImage.jpegData(compressionQuality: 0.45)
     modelContext.insert(document)
     createdDocument = document
 
     do {
-      let savedAsset = try await imageAssetService.saveImage(correctedImage)
-      document.photoAssetIdentifier = savedAsset.localIdentifier
-      document.imageHash = savedAsset.imageHash
+      var rawSnapshots: [OCRPageSnapshot] = []
+      var pageRecords: [PageRecord] = []
 
-      let ocr = try await ocrService.recognizeText(in: correctedImage)
-      let page = PageRecord(pageIndex: 0, ocrText: ocr.text)
-      page.photoAssetIdentifier = document.photoAssetIdentifier
-      page.imageHash = document.imageHash
-      page.setCropCorners(cropCorners)
-      page.observations = ocr.observations.map {
-        OCRObservationRecord(
-          text: $0.text,
-          confidence: $0.confidence,
-          boundingBoxX: $0.boundingBox.origin.x,
-          boundingBoxY: $0.boundingBox.origin.y,
-          boundingBoxWidth: $0.boundingBox.width,
-          boundingBoxHeight: $0.boundingBox.height
+      for (pageIndex, capturedPage) in capturedPages.enumerated() {
+        let correctedImage = try imageProcessingService.correctPerspective(
+          image: capturedPage.image.normalizedForProcessing(),
+          corners: capturedPage.cropCorners
+        )
+
+        if pageIndex == 0 {
+          document.thumbnailData = correctedImage.jpegData(compressionQuality: 0.45)
+        }
+
+        let savedAsset = try await imageAssetService.saveImage(correctedImage)
+        if pageIndex == 0 {
+          document.photoAssetIdentifier = savedAsset.localIdentifier
+          document.imageHash = savedAsset.imageHash
+        }
+
+        let ocr = try await ocrService.recognizeText(in: correctedImage)
+        let page = PageRecord(pageIndex: pageIndex, ocrText: ocr.text)
+        page.photoAssetIdentifier = savedAsset.localIdentifier
+        page.imageHash = savedAsset.imageHash
+        page.setCropCorners(capturedPage.cropCorners)
+        page.observations = ocr.observations.map {
+          OCRObservationRecord(
+            text: $0.text,
+            confidence: $0.confidence,
+            boundingBoxX: $0.boundingBox.origin.x,
+            boundingBoxY: $0.boundingBox.origin.y,
+            boundingBoxWidth: $0.boundingBox.width,
+            boundingBoxHeight: $0.boundingBox.height
+          )
+        }
+        document.pages.append(page)
+        pageRecords.append(page)
+        rawSnapshots.append(
+          OCRPageSnapshot(
+            pageIndex: pageIndex,
+            text: ocr.text,
+            observations: page.observations.map { OCRObservationSnapshot(id: $0.id, text: $0.text) }
+          )
         )
       }
-      document.pages.append(page)
-      document.ocrText = ocr.text
+
+      document.ocrText = combinedOCRText(from: rawSnapshots)
       document.status = .aiProcessing
 
-      let rawSnapshots = [
-        OCRPageSnapshot(
-          pageIndex: 0,
-          text: ocr.text,
-          observations: page.observations.map { OCRObservationSnapshot(id: $0.id, text: $0.text) }
-        )
-      ]
-      let correctedSnapshots = await ocrCorrector.correct(pages: rawSnapshots)
-      if let correctedText = correctedSnapshots.first?.text, correctedText != ocr.text {
-        page.correctedOCRText = correctedText
-        document.correctedOCRText = correctedText
+      let correctedSnapshots = await correctPageSnapshots(rawSnapshots)
+      for correctedSnapshot in correctedSnapshots {
+        guard pageRecords.indices.contains(correctedSnapshot.pageIndex) else {
+          continue
+        }
+        let page = pageRecords[correctedSnapshot.pageIndex]
+        if correctedSnapshot.text != page.ocrText {
+          page.correctedOCRText = correctedSnapshot.text
+        }
+      }
+      let combinedCorrectedText = combinedOCRText(from: correctedSnapshots)
+      if combinedCorrectedText != document.ocrText {
+        document.correctedOCRText = combinedCorrectedText
       }
 
-      let result = try await analyzer.analyze(pages: correctedSnapshots)
+      let result = try await analyzePageScoped(correctedSnapshots)
       document.title = result.documentTitle
       document.tasks = result.tasks.map { draft in
         let task = ExtractedTaskRecord(
@@ -310,11 +370,121 @@ struct CaptureFlowView: View {
       document.status = .failed
       document.failureReason = .imageError
       step = .failed("補正後の画像を写真ライブラリへ保存できませんでした")
+    } catch ImageAssetError.correctionFailed {
+      document.status = .failed
+      document.failureReason = .imageError
+      step = .failed("画像補正に失敗しました")
     } catch {
       document.status = .failed
       document.failureReason = .unknownError
       step = .failed("解析中にエラーが発生しました")
     }
+  }
+
+  private func correctPageSnapshots(_ snapshots: [OCRPageSnapshot]) async -> [OCRPageSnapshot] {
+    var correctedSnapshots = snapshots
+    for index in snapshots.indices {
+      let scopedSnapshots = pageScopedSnapshots(targetIndex: index, snapshots: snapshots)
+      let correctedScopedSnapshots = await ocrCorrector.correct(pages: scopedSnapshots)
+      if let correctedTarget = correctedScopedSnapshots.first {
+        correctedSnapshots[index] = correctedTarget
+      }
+    }
+    return correctedSnapshots
+  }
+
+  private func analyzePageScoped(_ snapshots: [OCRPageSnapshot]) async throws -> AnalysisResult {
+    var documentTitle: String?
+    var tasks: [TaskDraft] = []
+
+    for index in snapshots.indices {
+      let scopedSnapshots = pageScopedSnapshots(targetIndex: index, snapshots: snapshots)
+      do {
+        let result = try await analyzer.analyze(pages: scopedSnapshots)
+        if documentTitle == nil, !result.documentTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          documentTitle = result.documentTitle
+        }
+
+        let targetObservationIDs = Set(snapshots[index].observations.map(\.id))
+        tasks.append(contentsOf: result.tasks.filter { draft in
+          guard let evidenceObservationID = draft.evidenceObservationID else {
+            return false
+          }
+          return targetObservationIDs.contains(evidenceObservationID)
+        })
+      } catch DocumentAnalyzerError.noActionableTasks {
+        continue
+      }
+    }
+
+    let uniqueTasks = deduplicatedTasks(tasks)
+    guard !uniqueTasks.isEmpty else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
+
+    return AnalysisResult(
+      documentTitle: documentTitle ?? inferredDocumentTitle(from: snapshots),
+      tasks: uniqueTasks
+    )
+  }
+
+  private func pageScopedSnapshots(targetIndex: Int, snapshots: [OCRPageSnapshot]) -> [OCRPageSnapshot] {
+    guard snapshots.indices.contains(targetIndex) else {
+      return []
+    }
+
+    var scopedSnapshots = [snapshots[targetIndex]]
+    let nextIndex = targetIndex + 1
+    if snapshots.indices.contains(nextIndex) {
+      let nextPage = snapshots[nextIndex]
+      let contextObservations = Array(nextPage.observations.prefix(3))
+      if !contextObservations.isEmpty {
+        scopedSnapshots.append(OCRPageSnapshot(
+          pageIndex: nextPage.pageIndex,
+          text: contextObservations.map(\.text).joined(separator: "\n"),
+          observations: contextObservations
+        ))
+      }
+    }
+    return scopedSnapshots
+  }
+
+  private func combinedOCRText(from snapshots: [OCRPageSnapshot]) -> String {
+    snapshots
+      .sorted { $0.pageIndex < $1.pageIndex }
+      .map { snapshot in
+        if snapshots.count == 1 {
+          return snapshot.text
+        }
+        return "ページ\(snapshot.pageIndex + 1)\n\(snapshot.text)"
+      }
+      .joined(separator: "\n\n")
+  }
+
+  private func deduplicatedTasks(_ tasks: [TaskDraft]) -> [TaskDraft] {
+    var seenKeys: Set<String> = []
+    var uniqueTasks: [TaskDraft] = []
+    for task in tasks {
+      let key = [
+        task.title,
+        task.evidenceObservationID?.uuidString ?? "",
+        task.dueStart?.description ?? "",
+        task.dueEnd?.description ?? ""
+      ].joined(separator: "|")
+      guard !seenKeys.contains(key) else {
+        continue
+      }
+      seenKeys.insert(key)
+      uniqueTasks.append(task)
+    }
+    return uniqueTasks
+  }
+
+  private func inferredDocumentTitle(from snapshots: [OCRPageSnapshot]) -> String {
+    snapshots
+      .flatMap { $0.text.components(separatedBy: .newlines) }
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .first { !$0.isEmpty } ?? "プリント"
   }
 }
 

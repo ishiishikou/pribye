@@ -41,7 +41,15 @@ struct ImageAssetService {
   }
 
   func loadVerifiedImage(for document: DocumentRecord) async -> ImageAssetStateResult {
-    guard let identifier = document.photoAssetIdentifier else {
+    await loadVerifiedImage(identifier: document.photoAssetIdentifier, imageHash: document.imageHash)
+  }
+
+  func loadVerifiedImage(for page: PageRecord) async -> ImageAssetStateResult {
+    await loadVerifiedImage(identifier: page.photoAssetIdentifier, imageHash: page.imageHash)
+  }
+
+  private func loadVerifiedImage(identifier: String?, imageHash: String?) async -> ImageAssetStateResult {
+    guard let identifier else {
       return ImageAssetStateResult(image: nil, state: .deleted)
     }
 
@@ -55,7 +63,7 @@ struct ImageAssetService {
       guard let image = UIImage(data: imageData)?.normalizedForProcessing() else {
         return ImageAssetStateResult(image: nil, state: .permissionDenied)
       }
-      if let storedHash = document.imageHash, Self.hash(image: image) != storedHash {
+      if let storedHash = imageHash, Self.hash(image: image) != storedHash {
         return ImageAssetStateResult(image: nil, state: .modified)
       }
       return ImageAssetStateResult(image: image, state: .available)
