@@ -29,7 +29,7 @@ func probeStructuredTextResponse() async throws -> FoundationModelsProbeOutput {
   return response.content
 }
 
-@available(iOS 26.0, *)
+@available(iOS 26.5, *)
 func probeImageAttachmentResponse(image: CGImage) async throws -> LanguageModelSession.Response<String> {
   let session = makeProbeSession()
   return try await session.respond {

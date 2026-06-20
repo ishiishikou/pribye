@@ -7,7 +7,7 @@ on:
 
 jobs:
   probe:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +22,7 @@ jobs:
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           xcrun swiftc -typecheck \
-            -target arm64-apple-ios26.0 \
+            -target arm64-apple-ios26.5 \
             -sdk "$SDK_PATH" \
             tools/FoundationModelsImageProbe.swift
 
@@ -34,7 +34,7 @@ jobs:
 
           xcrun swift-symbolgraph-extract \
             -module-name FoundationModels \
-            -target arm64-apple-ios26.0 \
+            -target arm64-apple-ios26.5 \
             -sdk "$SDK_PATH" \
             -output-dir "$SYMBOL_DIR" || true
 
