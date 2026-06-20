@@ -186,6 +186,17 @@ struct DocumentDetailView: View {
           Text("OCR結果はありません")
             .foregroundStyle(.secondary)
         } else {
+          if let correctedOCRText = document.correctedOCRText, correctedOCRText != document.ocrText {
+            Text("AI補正後")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
+            Text(correctedOCRText)
+              .font(.callout)
+            Text("元のOCR")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
+              .padding(.top, 4)
+          }
           Text(document.ocrText)
             .font(.callout)
         }

@@ -1,6 +1,6 @@
 # TestFlight Upload 手順
 
-このプロジェクトは GitHub Actions で build/test できる状態です。TestFlight へアップロードするには、配布用署名アセットを用意し、手動実行 workflow を起動します。
+このプロジェクトは GitHub Actions で build/test できる状態です。TestFlight へアップロードするには、配布用署名アセットを用意し、`TestFlight Upload` workflow を使います。
 
 ## 現在の識別子
 
@@ -13,8 +13,9 @@
 
 - `.p12`、private key、provisioning profile、App Store Connect API key はリポジトリに commit しない。
 - GitHub Actions secrets に登録する値は、チャットや issue に貼らない。
-- TestFlight workflow は `workflow_dispatch` の手動実行のみ。push だけでは archive/upload しない。
-- ただし、この workflow ファイルを後で `main` に push すると、既存の `.github/workflows/ios.yml` は push に反応して build/test を実行する。
+- TestFlight workflow は手動実行できる。
+- `main` への push で `.github/workflows/ios.yml` が成功した場合、TestFlight workflow も自動実行される。
+- 自動実行は macOS runner を追加で消費するため、不要な小刻み push は避ける。
 
 ## GitHub Actions secrets
 
@@ -122,6 +123,14 @@ GitHub repository で Settings > Secrets and variables > Actions > Repository se
 - `*.base64.txt`
 
 ## 5. TestFlight upload workflow を実行する
+
+### 自動実行
+
+1. `main` に push する。
+2. `iOS` workflow が成功すると、`TestFlight Upload` workflow が自動で起動する。
+3. 成功後、App Store Connect > TestFlight に build が表示されるまで待つ。
+
+### 手動実行
 
 1. `.github/workflows/testflight.yml` が GitHub 上の対象ブランチに存在することを確認する。
 2. GitHub repository の Actions を開く。

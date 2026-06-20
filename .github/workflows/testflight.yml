@@ -1,6 +1,10 @@
 name: TestFlight Upload
 
 on:
+  workflow_run:
+    workflows: ["iOS"]
+    types: [completed]
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       build_number:
@@ -10,11 +14,20 @@ on:
 
 jobs:
   upload:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.event == 'push'
+        )
+      }}
     runs-on: macos-15
     env:
       APP_BUNDLE_ID: com.pribye.app
       TEAM_ID: 2QA6W85W3D
-      BUILD_NUMBER: ${{ inputs.build_number != '' && inputs.build_number || github.run_number }}
+      BUILD_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.build_number != '' && inputs.build_number || github.run_number }}
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}

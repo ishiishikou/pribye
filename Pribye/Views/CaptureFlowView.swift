@@ -2,6 +2,7 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
+import VisionKit
 
 enum CaptureStep {
   case input
@@ -20,10 +21,12 @@ struct CaptureFlowView: View {
   @State private var selectedItem: PhotosPickerItem?
   @State private var selectedImage: UIImage?
   @State private var cropCorners = CropPreview.defaultCorners
+  @State private var isShowingDocumentScanner = false
   @State private var isShowingCamera = false
   @State private var createdDocument: DocumentRecord?
 
   private let ocrService: OCRServiceProtocol = VisionOCRService()
+  private let ocrCorrector: OCRTextCorrector = FoundationModelsOCRTextCorrector()
   private let analyzer: DocumentAnalyzer = FoundationModelsDocumentAnalyzer()
   private let imageAssetService = ImageAssetService()
   private let imageProcessingService = ImageProcessingService()
@@ -59,6 +62,18 @@ struct CaptureFlowView: View {
     .onChange(of: selectedItem) { _, newValue in
       Task { await load(item: newValue) }
     }
+    .fullScreenCover(isPresented: $isShowingDocumentScanner) {
+      DocumentScannerView { images in
+        useScannedImages(images)
+        isShowingDocumentScanner = false
+      } onCancel: {
+        isShowingDocumentScanner = false
+      } onError: { _ in
+        isShowingDocumentScanner = false
+        step = .failed("書類スキャンに失敗しました")
+      }
+      .ignoresSafeArea()
+    }
     .fullScreenCover(isPresented: $isShowingCamera) {
       CameraImagePicker { image in
         selectedImage = image
@@ -83,13 +98,15 @@ struct CaptureFlowView: View {
         .font(.title2.weight(.bold))
 
       Button {
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+        if VNDocumentCameraViewController.isSupported {
+          isShowingDocumentScanner = true
+        } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
           isShowingCamera = true
         } else {
           step = .failed("この端末ではカメラを利用できません")
         }
       } label: {
-        Label("カメラで撮影", systemImage: "camera")
+        Label("書類をスキャン", systemImage: "doc.viewfinder")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
@@ -194,6 +211,19 @@ struct CaptureFlowView: View {
   }
 
   @MainActor
+  private func useScannedImages(_ images: [UIImage]) {
+    guard let image = images.first else {
+      step = .failed("スキャン画像を読み込めませんでした")
+      return
+    }
+
+    selectedImage = image.normalizedForProcessing()
+    selectedItem = nil
+    cropCorners = CropPreview.defaultCorners
+    step = .correction
+  }
+
+  @MainActor
   private func analyzeSelectedImage() async {
     guard let selectedImage else {
       step = .failed("画像が選択されていません")
@@ -239,14 +269,20 @@ struct CaptureFlowView: View {
       document.ocrText = ocr.text
       document.status = .aiProcessing
 
-      let snapshots = [
+      let rawSnapshots = [
         OCRPageSnapshot(
           pageIndex: 0,
           text: ocr.text,
           observations: page.observations.map { OCRObservationSnapshot(id: $0.id, text: $0.text) }
         )
       ]
-      let result = try await analyzer.analyze(pages: snapshots)
+      let correctedSnapshots = await ocrCorrector.correct(pages: rawSnapshots)
+      if let correctedText = correctedSnapshots.first?.text, correctedText != ocr.text {
+        page.correctedOCRText = correctedText
+        document.correctedOCRText = correctedText
+      }
+
+      let result = try await analyzer.analyze(pages: correctedSnapshots)
       document.title = result.documentTitle
       document.tasks = result.tasks.map { draft in
         let task = ExtractedTaskRecord(
@@ -296,7 +332,7 @@ struct CropPreview: View {
 
   var body: some View {
     VStack(spacing: 12) {
-      MagnifiedCornerView(image: image, corner: corners[selectedCornerIndex])
+      MagnifiedCornerView(image: image, corners: corners, selectedCornerIndex: selectedCornerIndex)
         .frame(height: 128)
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -355,28 +391,51 @@ struct EditableCornerImage: View {
 
 struct MagnifiedCornerView: View {
   var image: UIImage
-  var corner: CGPoint
+  var corners: [CGPoint]
+  var selectedCornerIndex: Int
 
   var body: some View {
     GeometryReader { proxy in
-      let imageRect = fittedImageRect(in: proxy.size, imageSize: image.size)
-      let displayCorner = displayPoint(for: corner, in: imageRect)
+      if corners.indices.contains(selectedCornerIndex), corners.count >= 3 {
+        let imageRect = fittedImageRect(in: proxy.size, imageSize: image.size)
+        let selectedCorner = corners[selectedCornerIndex]
 
-      ZStack {
         Image(uiImage: image)
           .resizable()
           .scaledToFit()
-          .scaleEffect(2.6, anchor: UnitPoint(x: corner.x, y: corner.y))
           .frame(width: proxy.size.width, height: proxy.size.height)
-          .clipped()
           .overlay {
-            Circle()
-              .stroke(.orange, lineWidth: 2)
-              .frame(width: 30, height: 30)
-              .position(displayCorner)
+            let displayPoints = corners.map { displayPoint(for: $0, in: imageRect) }
+            ZStack {
+              Path { path in
+                path.addLines(displayPoints)
+                path.closeSubpath()
+              }
+              .stroke(.blue, lineWidth: 2)
+
+              Path { path in
+                let selectedPoint = displayPoints[selectedCornerIndex]
+                let previousPoint = displayPoints[(selectedCornerIndex + displayPoints.count - 1) % displayPoints.count]
+                let nextPoint = displayPoints[(selectedCornerIndex + 1) % displayPoints.count]
+                path.move(to: previousPoint)
+                path.addLine(to: selectedPoint)
+                path.addLine(to: nextPoint)
+              }
+              .stroke(.orange, lineWidth: 4)
+
+              ForEach(corners.indices, id: \.self) { index in
+                Circle()
+                  .fill(index == selectedCornerIndex ? .orange : .blue)
+                  .frame(width: index == selectedCornerIndex ? 28 : 18, height: index == selectedCornerIndex ? 28 : 18)
+                  .overlay(Circle().stroke(.white, lineWidth: 3))
+                  .position(displayPoints[index])
+              }
+            }
           }
+          .scaleEffect(2.6, anchor: UnitPoint(x: selectedCorner.x, y: selectedCorner.y))
+          .clipped()
+          .background(.secondary.opacity(0.08))
       }
-      .background(.secondary.opacity(0.08))
     }
   }
 }

@@ -74,6 +74,7 @@ final class DocumentRecord {
   var sourceImageStateRaw: String
   var thumbnailData: Data?
   var ocrText: String
+  var correctedOCRText: String?
 
   @Relationship(deleteRule: .cascade, inverse: \PageRecord.document)
   var pages: [PageRecord]
@@ -96,6 +97,7 @@ final class DocumentRecord {
     self.lifecycleRaw = lifecycle.rawValue
     self.sourceImageStateRaw = sourceImageState.rawValue
     self.ocrText = ""
+    self.correctedOCRText = nil
     self.pages = []
     self.tasks = []
   }
@@ -136,6 +138,7 @@ final class PageRecord {
   var cropBottomLeftX: Double
   var cropBottomLeftY: Double
   var ocrText: String
+  var correctedOCRText: String?
   var document: DocumentRecord?
 
   @Relationship(deleteRule: .cascade, inverse: \OCRObservationRecord.page)
@@ -145,6 +148,7 @@ final class PageRecord {
     self.id = id
     self.pageIndex = pageIndex
     self.ocrText = ocrText
+    self.correctedOCRText = nil
     self.cropTopLeftX = 0
     self.cropTopLeftY = 0
     self.cropTopRightX = 1

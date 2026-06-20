@@ -40,7 +40,7 @@ GitHub Actions:
 - workflow: `.github/workflows/ios.yml`
 - `xcodegen generate` と `xcodebuild test` を macOS runner で実行
 - workflow: `.github/workflows/testflight.yml`
-- TestFlight upload用の手動実行workflow。`workflow_dispatch` のみで自動実行しない。
+- TestFlight upload用workflow。`workflow_dispatch` の手動実行に加え、`iOS` workflowが`main`へのpushで成功した場合に自動実行する。
 - 確認済みの成功run:
   - `27737585159` `Document TestFlight upload preparation`
   - `27737437580` `Mark Bundle ID registration complete`
@@ -50,7 +50,7 @@ GitHub Actions:
 注意:
 
 - private repository の GitHub-hosted macOS runner は GitHub Actions の無料枠を消費する。
-- `main` へのpushでCIが走るため、無料枠節約のため、次チャットでは必要なときだけpushする。
+- `main` へのpushでiOS CIが走り、成功するとTestFlight Uploadも続けて走るため、無料枠節約のため、次チャットでは必要なときだけpushする。
 - ローカルcommitだけならGitHub Actionsは走らない。
 
 ## Apple Developer / App Store Connect 状態
@@ -87,6 +87,7 @@ GitHub Actions:
 - `docs/ADMOB_SETUP.md`
 - `docs/APP_PRIVACY.md`
 - `docs/FOUNDATION_MODELS_SETUP.md`
+- `docs/APPLE_PLATFORM_FEATURE_AUDIT.md`
 - `docs/STOREKIT_SETUP.md`
 - `docs/TESTFLIGHT_UPLOAD.md`
 
@@ -106,7 +107,7 @@ GitHub Actions:
   - GitHub Actions macOS runnerで `xcodegen generate` と `xcodebuild test` を実行
 - `.github/workflows/testflight.yml`
   - GitHub Actions macOS runnerで署名付きarchiveを作成し、TestFlightへuploadする手動実行workflow
-  - `workflow_dispatch` のみで自動実行しない
+  - 手動実行に加え、`iOS` workflowが`main`へのpushで成功した場合に自動実行
 - `.gitignore`
 - `README.md`
 - `docs/APP_STORE_CHECKLIST.md`
@@ -188,6 +189,9 @@ UI方針:
 - `FoundationModelsDocumentAnalyzer`
   - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は `HeuristicDocumentAnalyzer` へフォールバック
+- `FoundationModelsOCRTextCorrector`
+  - `FoundationModels` framework が利用できる場合、OCR後・タスク抽出前に明らかなOCR誤認だけをオンデバイス補正
+  - 補正失敗、Apple Intelligence利用不可、モデル未準備の場合は元OCRテキストをそのまま利用
 - `HeuristicDocumentAnalyzer`
   - OCRテキストから期限/期間と行動らしい文を簡易抽出
 - `DateRangeParser`
@@ -258,13 +262,14 @@ CIを通すために以下を修正済み:
 
 ### カメラ・四隅補正
 
-現在の撮影フローは、実機カメラ撮影、`PhotosPicker`、デモデータ追加に対応しています。
+現在の撮影フローは、VisionKit書類スキャン、実機カメラ撮影フォールバック、`PhotosPicker`、デモデータ追加に対応しています。
 
 実装済み:
 
-- `UIImagePickerController` による実機カメラ撮影
+- `VisionKit` / `VNDocumentCameraViewController` による標準書類スキャン
+- `UIImagePickerController` による実機カメラ撮影フォールバック
 - 四隅ドラッグ操作
-- 選択中頂点の拡大確認
+- 選択中頂点と接続線の拡大確認
 - Core Image `CIPerspectiveCorrection` による補正後画像生成
 - 補正後画像の写真ライブラリ保存
 - Photos asset ID 保存
@@ -276,7 +281,7 @@ CIを通すために以下を修正済み:
 - OCR座標とハイライト画像の座標系を一致させるため、Documentに紐づけるPhotos assetは補正後画像です。
 - Photos保存後の再取得で未編集画像を変更済み扱いしにくくするため、補正後画像はPNGデータとして保存し、ハッシュも画面スケール非依存のPNG描画データから生成します。
 - `PHPhotoLibrary` / `PHImageManager` の completion handler はMainActor上で直接定義しない。Swift 6のactor isolation runtime checkで実機クラッシュする可能性があるため、Photos callback は nonisolated helper に閉じ込める。
-- Windows環境では実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
+- Windows環境ではVisionKit書類スキャン、実機カメラ、Photos権限、Core Image補正、ハイライト表示の実機検証はできていません。TestFlightまたはXcode 26環境で確認してください。
 
 ### 広告・課金
 
@@ -310,10 +315,10 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 
 優先度順:
 
-1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI が成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. iOS CI 成功後、`TestFlight Upload` workflowを手動実行し、App Store Connect uploadまで成功するか確認する。
-3. TestFlightで実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを確認する。
-4. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Models実API接続をXcode 26 / 対応実機で検証する。
+1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
+2. TestFlightでVisionKit書類スキャン、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを確認する。
+3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
+4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
 6. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
 7. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
@@ -324,12 +329,12 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 HANDOFF.md を読んで、プリバイ開発の現在地を把握してください。
 pushはまだしないでください。GitHub Actions無料枠を節約したいので、必要な作業はまずローカルで止めてください。
 TestFlight upload 用のGitHub Actions secretsは登録済みです。
-次は、ユーザー承認後にpushし、iOS CI成功後に`TestFlight Upload` workflowを手動実行してください。
+次は、ユーザー承認後にpushし、iOS CIと自動TestFlight Uploadの結果を確認してください。
 ```
 
 ## 注意
 
-- `main` にpushするとGitHub Actionsが走る。無料枠節約のため、pushはユーザー確認後に行う。
+- `main` にpushするとGitHub Actionsが走り、iOS CI成功後にTestFlight Uploadも自動実行される。無料枠節約のため、pushはユーザー確認後に行う。
 - private repo の macOS Actions は無料枠を消費する。
 - ローカルcommitだけならActionsは走らない。
 - Macがない前提では、TestFlight upload はGitHub Actionsで行う想定。
