@@ -127,8 +127,12 @@ struct DocumentDetailLookupView: View {
 }
 
 struct DocumentDetailView: View {
+  @Environment(\.modelContext) private var modelContext
   @Environment(RouterPath.self) private var router
   @Bindable var document: DocumentRecord
+  @State private var isReanalyzing = false
+
+  private let analysisPipeline = DocumentAnalysisPipeline()
 
   var body: some View {
     List {
@@ -140,6 +144,11 @@ struct DocumentDetailView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
           StatusPill(text: document.status.userLabel, color: document.status == .failed ? .red : .blue)
+          if let failureReason = document.failureReason {
+            Text(failureReason.message)
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
         }
         .padding(.vertical, 8)
       }
@@ -204,9 +213,16 @@ struct DocumentDetailView: View {
 
       if document.status == .failed {
         Section {
-          Button("再解析する") {
-            document.status = .aiProcessing
+          Button {
+            Task { await reanalyzeDocument() }
+          } label: {
+            if isReanalyzing {
+              ProgressView()
+            } else {
+              Label("再解析する", systemImage: "arrow.clockwise")
+            }
           }
+          .disabled(isReanalyzing)
           Button("手動で登録する") {
             router.presentedSheet = .manualTask(documentID: document.id)
           }
@@ -215,5 +231,40 @@ struct DocumentDetailView: View {
     }
     .navigationTitle("プリント詳細")
     .navigationBarTitleDisplayMode(.inline)
+  }
+
+  @MainActor
+  private func reanalyzeDocument() async {
+    let snapshots = ocrSnapshots(from: document)
+    guard !snapshots.isEmpty else {
+      document.status = .failed
+      document.failureReason = .ocrError
+      return
+    }
+
+    isReanalyzing = true
+    defer { isReanalyzing = false }
+
+    let oldTasks = document.tasks
+    document.tasks.removeAll()
+    for task in oldTasks {
+      modelContext.delete(task)
+    }
+
+    document.status = .aiProcessing
+    document.failureReason = nil
+
+    do {
+      try await analysisPipeline.applyAnalysis(to: document, snapshots: snapshots)
+    } catch DocumentAnalyzerError.noActionableTasks {
+      document.status = .failed
+      document.failureReason = .extractionError
+    } catch DocumentAnalyzerError.unsupportedDevice {
+      document.status = .failed
+      document.failureReason = .unsupportedDevice
+    } catch {
+      document.status = .failed
+      document.failureReason = .unknownError
+    }
   }
 }

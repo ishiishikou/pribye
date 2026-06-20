@@ -17,7 +17,9 @@ struct AppView: View {
         .withSheetDestinations(sheet: Binding(
           get: { router.presentedSheet },
           set: { router.presentedSheet = $0 }
-        ))
+        ), onAnalysisStarted: {
+          selectedTab = .prints
+        })
         .environment(router)
         .tabItem { tab.label }
         .tag(tab)
@@ -46,12 +48,15 @@ extension View {
     }
   }
 
-  func withSheetDestinations(sheet destination: Binding<SheetDestination?>) -> some View {
+  func withSheetDestinations(
+    sheet destination: Binding<SheetDestination?>,
+    onAnalysisStarted: @escaping () -> Void
+  ) -> some View {
     self.sheet(item: destination) { destination in
       NavigationStack {
         switch destination {
         case .capture:
-          CaptureFlowView()
+          CaptureFlowView(onAnalysisStarted: onAnalysisStarted)
         case .manualTask(let documentID):
           ManualTaskView(documentID: documentID)
         }

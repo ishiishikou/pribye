@@ -165,7 +165,7 @@ GitHub Actions:
 - プリント一覧
 - タスク詳細
 - プリント詳細
-- 撮影/補正/解析/結果確認フロー
+- 撮影/補正/バックグラウンド解析フロー
 - 手動タスク追加
 - 設定
 - タスク詳細からの根拠ハイライト表示。根拠テキストと画像ハイライトを同じ画面で確認できる
@@ -174,9 +174,9 @@ UI方針:
 
 - `TabView` は `タスク / プリント / 設定`
 - 撮影はシートで表示
-- 広告は一覧画面下部のAdMob bannerのみ。SDK未解決時だけプレースホルダーにフォールバック
-- 撮影、補正、確認、詳細画面には広告を表示しない
-- 解析後の確認画面は設定でON/OFF可能
+- 広告はタスク一覧/プリント一覧の下部固定AdMob bannerのみ。SDK未解決時だけプレースホルダーにフォールバック
+- 撮影、補正、詳細画面には広告を表示しない
+- 解析開始後は撮影シートを閉じ、プリント一覧へ移動する。ユーザーは解析中に画面を離れてよい。
 
 ### サービス
 
@@ -189,14 +189,17 @@ UI方針:
 - `FoundationModelsDocumentAnalyzer`
   - `FoundationModels` framework が利用でき、`SystemLanguageModel.default.isAvailable` がtrueの場合は `LanguageModelSession` の structured generation を利用
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
-  - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合は `HeuristicDocumentAnalyzer` へフォールバック
+  - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合はフォールバックせず、解析失敗として表示する
+- `DocumentAnalysisPipeline`
+  - 撮影後解析とプリント詳細からの再解析で共通利用するタスク抽出パイプライン
+  - ページ単位解析、根拠行補正、タスク重複排除、`DocumentRecord` への反映を担当
 - `FoundationModelsOCRTextCorrector`
   - `FoundationModels` framework が利用できる場合、タスク化された根拠行だけをオンデバイス補正
   - 根拠行の前後行、ページ境界では隣接ページの近接行も文脈として渡す
   - 補正文はOCR結果欄には表示せず、タスクの根拠テキストとして表示する
   - 補正失敗、Apple Intelligence利用不可、モデル未準備の場合は元OCRテキストをそのまま利用
 - `HeuristicDocumentAnalyzer`
-  - OCRテキストから期限/期間と行動らしい文を簡易抽出
+  - 旧fallback用の簡易抽出器。現在のアプリ本体では自動fallbackとして使わない
 - `DateRangeParser`
   - `6月20日まで`、`6/15〜6/20` などを解析
 - `EventKitCalendarService`
@@ -258,7 +261,7 @@ CIを通すために以下を修正済み:
 
 - `canImport(FoundationModels)` の環境では `LanguageModelSession.respond(to:generating:includeSchemaInPrompt:options:)` を使用。
 - 出力は `@Generable` DTOで受け、既存の `AnalysisResult` / `TaskDraft` に変換。
-- Foundation Models が利用不可の場合は、CIと非対応端末で動くよう `HeuristicDocumentAnalyzer` にフォールバック。
+- Foundation Models が利用不可の場合は `HeuristicDocumentAnalyzer` にフォールバックしない。解析失敗として見せる。
 
 注意:
 
@@ -270,16 +273,16 @@ CIを通すために以下を修正済み:
 
 ### カメラ・四隅補正
 
-現在の撮影フローは、VisionKit書類スキャン、実機カメラ撮影フォールバック、`PhotosPicker`、デモデータ追加に対応しています。
+現在の撮影フローは、実機カメラ撮影、VisionKit書類スキャンフォールバック、`PhotosPicker`、デモデータ追加に対応しています。
 
 実装済み:
 
-- `VisionKit` / `VNDocumentCameraViewController` による標準書類スキャン
+- `UIImagePickerController` による実機カメラ撮影。未補正画像をアプリ側の四隅選択に渡す
+- 実機カメラが使えない場合のみ、`VisionKit` / `VNDocumentCameraViewController` による標準書類スキャンへフォールバック
 - `VNDocumentCameraScan` が返す複数ページを1プリント内の複数 `PageRecord` として保持
-- `UIImagePickerController` による実機カメラ撮影フォールバック
 - 四隅ドラッグ操作
 - 選択中頂点と接続線の拡大確認
-- VisionKit書類スキャン後も、拡大確認付きの四隅ドラッグ調整画面を表示する。初期四隅は画像全体にし、ユーザーがこの画面で選び直せる
+- VisionKit書類スキャンは標準UIが補正後画像だけを返すため、四隅選択はその画像範囲内の微調整になる。元の撮影範囲から四隅を選ぶ経路は実機カメラ撮影を使う
 - VisionKit標準スキャンUIが日本語リソースを選ぶよう、アプリの開発言語/ローカライズは日本語に設定
 - Core Image `CIPerspectiveCorrection` による補正後画像生成
 - カメラ/書類スキャン由来の補正後画像は写真ライブラリへ保存
@@ -301,7 +304,7 @@ CIを通すために以下を修正済み:
 
 実装済み:
 
-- 一覧画面下部のAdMob anchored adaptive banner
+- タスク一覧/プリント一覧の下部固定AdMob anchored adaptive banner
 - SDK未解決環境での広告プレースホルダーフォールバック
 - Google公式テスト App ID / banner ad unit ID
 - `GADApplicationIdentifier`
@@ -328,7 +331,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 優先度順:
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightでVisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライトを確認する。
+2. TestFlightで実機カメラ撮影、VisionKit複数ページ書類スキャン、ページ切替付き四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
 3. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
 4. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。

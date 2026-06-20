@@ -53,7 +53,7 @@ final class VisionOCRService: OCRServiceProtocol {
       request.usesLanguageCorrection = true
       request.recognitionLanguages = ["ja-JP", "en-US"]
 
-      let handler = VNImageRequestHandler(cgImage: cgImage)
+      let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up)
       do {
         try handler.perform([request])
       } catch {

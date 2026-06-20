@@ -149,10 +149,16 @@ private func fittedEvidenceImageRect(in container: CGSize, imageSize: CGSize) ->
 private func displayRect(for observation: OCRObservationRecord, in imageRect: CGRect) -> CGRect {
   let x = imageRect.minX + CGFloat(observation.boundingBoxX) * imageRect.width
   let y = imageRect.minY + CGFloat(1 - observation.boundingBoxY - observation.boundingBoxHeight) * imageRect.height
-  return CGRect(
+  let rect = CGRect(
     x: x,
     y: y,
     width: CGFloat(observation.boundingBoxWidth) * imageRect.width,
     height: CGFloat(observation.boundingBoxHeight) * imageRect.height
   )
+  return paddedRect(rect, inside: imageRect)
+}
+
+private func paddedRect(_ rect: CGRect, inside bounds: CGRect) -> CGRect {
+  let padded = rect.insetBy(dx: -4, dy: -3)
+  return padded.intersection(bounds)
 }

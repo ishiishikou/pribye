@@ -52,15 +52,14 @@ struct TaskListView: View {
               }
             }
           }
-
-          Section {
-            AdBannerPlaceholder()
-          }
-          .listRowSeparator(.hidden)
         }
       }
     }
     .navigationTitle("タスク")
+    .safeAreaInset(edge: .bottom) {
+      AdBannerPlaceholder()
+        .background(.background)
+    }
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button {

@@ -31,7 +31,23 @@ enum AnalysisFailureReason: String, Codable, CaseIterable, Error {
   case imageError = "IMAGE_ERROR"
   case ocrError = "OCR_ERROR"
   case extractionError = "EXTRACTION_ERROR"
+  case unsupportedDevice = "UNSUPPORTED_DEVICE"
   case unknownError = "UNKNOWN_ERROR"
+
+  var message: String {
+    switch self {
+    case .imageError:
+      return "画像の保存または補正に失敗しました。"
+    case .ocrError:
+      return "OCRに失敗しました。"
+    case .extractionError:
+      return "このプリントからタスクを抽出できませんでした。"
+    case .unsupportedDevice:
+      return "この端末ではAI解析を利用できません。"
+    case .unknownError:
+      return "解析中にエラーが発生しました。"
+    }
+  }
 }
 
 enum SourceImageState: String, Codable, CaseIterable {

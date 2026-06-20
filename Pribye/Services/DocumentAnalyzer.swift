@@ -44,10 +44,6 @@ struct AppleIntelligenceAvailability: Sendable {
     if #available(iOS 26.0, *) {
       return SystemLanguageModel.default.isAvailable
     }
-    #else
-    if #available(iOS 26.0, *) {
-      return true
-    }
     #endif
     return false
   }
@@ -55,14 +51,9 @@ struct AppleIntelligenceAvailability: Sendable {
 
 struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
   private let availability: AppleIntelligenceAvailability
-  private let fallback: HeuristicDocumentAnalyzer
 
-  init(
-    availability: AppleIntelligenceAvailability = AppleIntelligenceAvailability(),
-    fallback: HeuristicDocumentAnalyzer = HeuristicDocumentAnalyzer()
-  ) {
+  init(availability: AppleIntelligenceAvailability = AppleIntelligenceAvailability()) {
     self.availability = availability
-    self.fallback = fallback
   }
 
   func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
@@ -71,7 +62,7 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
       return try await analyzeWithFoundationModels(pages: pages)
     }
     #endif
-    return try await fallback.analyze(pages: pages)
+    throw DocumentAnalyzerError.unsupportedDevice
   }
 
   #if canImport(FoundationModels)
@@ -80,12 +71,18 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
     let session = LanguageModelSession(
       model: .default,
       instructions: """
-      あなたは学校・幼稚園などの配布プリントから、ユーザーが行動すべき最小限のタスクだけを抽出します。
-      外部知識で補完せず、OCR入力に含まれる内容だけを使ってください。
-      複数ページが渡された場合、入力内で最初に表示されたPageだけをタスク抽出対象にし、後続Pageは文脈としてのみ参照してください。
-      分類、場所、優先度、全文要約は作らないでください。
-      日付は分かる場合だけ yyyy-MM-dd で返してください。
-      根拠はOCR行の text をそのまま短く返し、対応する observation ID を必ず選んでください。
+      あなたは学校・幼稚園などの配布プリントから、タスク管理アプリに登録するためのタスク一覧を作成するアシスタントです。
+      OCRで読み取った内容のみを根拠として、ユーザーが実際に行うタスクを抽出してください。
+      外部知識で内容を補完・推測してはいけません。
+      OCRの誤認識と思われる箇所は、OCR内の文脈から自然に補正できる場合のみ補正してください。不確かな場合は補正しないでください。
+      複数ページが渡された場合、タスク抽出対象は入力内で最初に表示されたPageのみとし、後続Pageは文脈理解のためだけに参照してください。
+      分類、場所、優先度、全文要約は作成しないでください。
+      ユーザーが一度の作業として実施できる内容を1タスクとし、同じ目的の連続した作業は1つにまとめてください。
+      細かな手順には分割せず、必要以上にタスク数を増やさないでください。
+      各タスクは15文字以内で簡潔に表現し、「〜してください」などの依頼表現は含めないでください。
+      時系列は維持してください。
+      日付はOCRから判断できる場合のみ yyyy-MM-dd 形式で返してください。不明な場合は設定しないでください。
+      根拠には、対応するOCR行の text を短くそのまま引用し、対応する observation ID を必ず指定してください。
       """
     )
 
@@ -99,12 +96,6 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
   }
 
   private func makeFoundationModelPrompt(pages: [OCRPageSnapshot]) -> String {
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd"
-    let today = formatter.string(from: .now)
     let pageText = pages
       .map { page in
         let observations = page.observations
@@ -115,21 +106,9 @@ struct FoundationModelsDocumentAnalyzer: DocumentAnalyzer {
       .joined(separator: "\n\n")
 
     return """
-    今日の日付: \(today)
-
-    次のOCR行から、提出、持参、申込、準備、検温、支払い、参加など、ユーザーが行動すべきタスクだけを抽出してください。
-    複数ページが渡された場合、入力内で最初に表示されたPageだけをタスク抽出対象にし、後続Pageは前後の文脈としてのみ使ってください。
-
-    期間がある場合:
-    - dueStart に開始日
-    - dueEnd に終了日
-
-    期限だけの場合:
-    - dueEnd に期限日
-    - dueStart は空
-
-    日付が年なしの場合は、今日の日付を基準に最も自然な年を補ってください。
+    次のOCR行から、ユーザーが実際に行うタスクだけを抽出してください。
     行動ではない見出し、説明文、挨拶、問い合わせ先はタスクにしないでください。
+    OCRに年まで判断できる情報がない日付は設定しないでください。
 
     OCR:
     \(pageText)
@@ -150,14 +129,14 @@ private struct FoundationModelAnalysisOutput {
 
   func analysisResult() throws -> AnalysisResult {
     let convertedTasks = tasks.compactMap { task -> TaskDraft? in
-      let title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+      let title = Self.compactTaskTitle(task.title)
       guard !title.isEmpty else {
         return nil
       }
 
       return TaskDraft(
         title: title,
-        note: task.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+        note: "",
         dueStart: Self.parseDate(task.dueStart),
         dueEnd: Self.parseDate(task.dueEnd),
         evidenceText: task.evidenceText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -174,6 +153,14 @@ private struct FoundationModelAnalysisOutput {
       documentTitle: title.isEmpty ? "プリント" : title,
       tasks: convertedTasks
     )
+  }
+
+  private static func compactTaskTitle(_ value: String) -> String {
+    let title = value
+      .replacingOccurrences(of: "してください", with: "")
+      .replacingOccurrences(of: "お願いします", with: "")
+      .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+    return String(title.prefix(15))
   }
 
   private static func parseDate(_ value: String?) -> Date? {
@@ -282,10 +269,11 @@ struct HeuristicDocumentAnalyzer: DocumentAnalyzer {
       title = title.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
     }
 
-    return title
+    let compacted = title
       .replacingOccurrences(of: "してください", with: "")
       .replacingOccurrences(of: "します", with: "")
       .replacingOccurrences(of: #"^\s*に"#, with: "", options: .regularExpression)
       .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+    return String(compacted.prefix(15))
   }
 }

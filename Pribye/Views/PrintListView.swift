@@ -27,15 +27,14 @@ struct PrintListView: View {
               .buttonStyle(.plain)
             }
           }
-
-          Section {
-            AdBannerPlaceholder()
-          }
-          .listRowSeparator(.hidden)
         }
       }
     }
     .navigationTitle("プリント")
+    .safeAreaInset(edge: .bottom) {
+      AdBannerPlaceholder()
+        .background(.background)
+    }
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button {

@@ -5,7 +5,6 @@ struct SettingsView: View {
   @Environment(\.modelContext) private var modelContext
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
 
-  @AppStorage("showReviewAfterAnalysis") private var showReviewAfterAnalysis = true
   @AppStorage("adsRemoved") private var adsRemoved = false
   @StateObject private var purchaseService = PurchaseService()
 
@@ -15,10 +14,6 @@ struct SettingsView: View {
 
   var body: some View {
     List {
-      Section {
-        Toggle("解析後に確認画面を開く", isOn: $showReviewAfterAnalysis)
-      }
-
       Section("広告") {
         if adsRemoved {
           Label("広告は非表示です", systemImage: "checkmark.circle.fill")
