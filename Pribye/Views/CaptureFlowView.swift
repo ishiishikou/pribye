@@ -15,7 +15,7 @@ enum CaptureStep {
 struct CapturedPageImage: Identifiable {
   let id = UUID()
   var image: UIImage
-  var cropCorners: [CGPoint] = CropPreview.defaultCorners
+  var cropCorners: [CGPoint] = defaultCropCorners()
 }
 
 struct CaptureFlowView: View {
@@ -489,12 +489,7 @@ struct CaptureFlowView: View {
 }
 
 struct CropPreview: View {
-  static let defaultCorners = [
-    CGPoint(x: 0.06, y: 0.06),
-    CGPoint(x: 0.94, y: 0.06),
-    CGPoint(x: 0.94, y: 0.94),
-    CGPoint(x: 0.06, y: 0.94)
-  ]
+  static let defaultCorners = defaultCropCorners()
 
   var image: UIImage
   @Binding var corners: [CGPoint]
@@ -514,6 +509,15 @@ struct CropPreview: View {
         .foregroundStyle(.secondary)
     }
   }
+}
+
+private func defaultCropCorners() -> [CGPoint] {
+  [
+    CGPoint(x: 0.06, y: 0.06),
+    CGPoint(x: 0.94, y: 0.06),
+    CGPoint(x: 0.94, y: 0.94),
+    CGPoint(x: 0.06, y: 0.94)
+  ]
 }
 
 struct EditableCornerImage: View {

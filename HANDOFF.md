@@ -244,6 +244,7 @@ CIを通すために以下を修正済み:
 - `altool` がupload失敗ログを出してもstep成功扱いになるケースを防ぐため、uploadログ内の失敗文字列を検出してworkflowを失敗させるように修正。
 - 実機クラッシュログ `Pribye-2026-06-19-192256.ips` で、補正後画像の写真ライブラリ保存時に `PHPhotoLibrary` の callback が `com.apple.PHPhotoLibrary.changes` queue から呼ばれ、`@MainActor` 隔離された closure が Swift 6 の actor isolation runtime check で `EXC_BREAKPOINT` になる問題を確認。`ImageAssetService` の Photos callback 処理を nonisolated helper に分離して修正。
 - iOS CI run `27857552838` で、`ImageAssetService.loadImageData` の `withCheckedThrowingContinuation` に `return` がなく Swift 6 build error になった問題を確認。`return try await` に修正し、あわせて `createPhotoAsset` の Photos callback で mutable captured var 警告が出ないよう同期 state に分離。
+- iOS CI run `27859101646` で、`CapturedPageImage.cropCorners` の default value が `CropPreview.defaultCorners` を参照し、Swift 6でMainActor隔離値扱いになってbuild errorになる問題を確認。四隅初期値をView型から独立したhelperへ分離して修正。
 
 ## 現在の重要な制約
 
