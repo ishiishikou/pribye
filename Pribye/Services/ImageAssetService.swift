@@ -82,15 +82,15 @@ struct ImageAssetService {
 
   private nonisolated static func createPhotoAsset(with imageData: Data) async throws -> String {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-      var placeholderIdentifier: String?
+      let creationState = PhotoAssetCreationState()
       PHPhotoLibrary.shared().performChanges {
         let request = PHAssetCreationRequest.forAsset()
         request.addResource(with: .photo, data: imageData, options: nil)
-        placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
+        creationState.placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
       } completionHandler: { success, error in
         if let error {
           continuation.resume(throwing: error)
-        } else if success, let placeholderIdentifier {
+        } else if success, let placeholderIdentifier = creationState.placeholderIdentifier {
           continuation.resume(returning: placeholderIdentifier)
         } else {
           continuation.resume(throwing: ImageAssetError.imageLoadFailed)
@@ -105,7 +105,7 @@ struct ImageAssetService {
       throw ImageAssetError.assetNotFound
     }
 
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+    return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
       let options = PHImageRequestOptions()
       options.deliveryMode = .highQualityFormat
       options.isNetworkAccessAllowed = false
@@ -125,6 +125,22 @@ struct ImageAssetService {
           return
         }
         continuation.resume(returning: data)
+      }
+    }
+  }
+
+  private final class PhotoAssetCreationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _placeholderIdentifier: String?
+
+    var placeholderIdentifier: String? {
+      get {
+        lock.withLock { _placeholderIdentifier }
+      }
+      set {
+        lock.withLock {
+          _placeholderIdentifier = newValue
+        }
       }
     }
   }

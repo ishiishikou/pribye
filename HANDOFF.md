@@ -237,6 +237,7 @@ CIを通すために以下を修正済み:
 - XcodeGenの `sources` 除外を `Resources/Info.plist` のみに変更し、`Assets.xcassets` がasset catalogとしてcompileされるように修正。
 - `altool` がupload失敗ログを出してもstep成功扱いになるケースを防ぐため、uploadログ内の失敗文字列を検出してworkflowを失敗させるように修正。
 - 実機クラッシュログ `Pribye-2026-06-19-192256.ips` で、補正後画像の写真ライブラリ保存時に `PHPhotoLibrary` の callback が `com.apple.PHPhotoLibrary.changes` queue から呼ばれ、`@MainActor` 隔離された closure が Swift 6 の actor isolation runtime check で `EXC_BREAKPOINT` になる問題を確認。`ImageAssetService` の Photos callback 処理を nonisolated helper に分離して修正。
+- iOS CI run `27857552838` で、`ImageAssetService.loadImageData` の `withCheckedThrowingContinuation` に `return` がなく Swift 6 build error になった問題を確認。`return try await` に修正し、あわせて `createPhotoAsset` の Photos callback で mutable captured var 警告が出ないよう同期 state に分離。
 
 ## 現在の重要な制約
 
@@ -309,8 +310,8 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 
 優先度順:
 
-1. ユーザー承認後にpushする。pushすると既存の `.github/workflows/ios.yml` が走り、macOS Actions無料枠を消費する。
-2. `TestFlight Upload` workflowを手動実行し、App Store Connect uploadまで成功するか確認する。
+1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI が成功するか確認する。pushするとmacOS Actions無料枠を消費する。
+2. iOS CI 成功後、`TestFlight Upload` workflowを手動実行し、App Store Connect uploadまで成功するか確認する。
 3. TestFlightで実機カメラ撮影、写真保存、四隅補正、画像ハッシュ、根拠ハイライトを確認する。
 4. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Models実API接続をXcode 26 / 対応実機で検証する。
 5. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
@@ -323,7 +324,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 HANDOFF.md を読んで、プリバイ開発の現在地を把握してください。
 pushはまだしないでください。GitHub Actions無料枠を節約したいので、必要な作業はまずローカルで止めてください。
 TestFlight upload 用のGitHub Actions secretsは登録済みです。
-次は、ユーザー承認後にpushし、`TestFlight Upload` workflowを手動実行してください。
+次は、ユーザー承認後にpushし、iOS CI成功後に`TestFlight Upload` workflowを手動実行してください。
 ```
 
 ## 注意
