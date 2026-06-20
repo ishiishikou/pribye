@@ -1,0 +1,73 @@
+name: Foundation Models Image Probe
+
+on:
+  push:
+    branches: ["probe-foundation-models-image"]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' -print | sort | tail -1)
+          if [ -z "$XCODE_PATH" ]; then XCODE_PATH=/Applications/Xcode.app; fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Typecheck Foundation Models probe
+        run: |
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun swiftc -typecheck \
+            -target arm64-apple-ios26.0 \
+            -sdk "$SDK_PATH" \
+            tools/FoundationModelsImageProbe.swift
+
+      - name: Search FoundationModels symbols for image APIs
+        run: |
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          SYMBOL_DIR="$RUNNER_TEMP/foundationmodels-symbols"
+          mkdir -p "$SYMBOL_DIR"
+
+          xcrun swift-symbolgraph-extract \
+            -module-name FoundationModels \
+            -target arm64-apple-ios26.0 \
+            -sdk "$SDK_PATH" \
+            -output-dir "$SYMBOL_DIR" || true
+
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          symbol_dir = pathlib.Path(__import__("os").environ["RUNNER_TEMP"]) / "foundationmodels-symbols"
+          keywords = re.compile(r"(image|vision|visual|media|multimodal|prompt|transcript|attachment|tool)", re.I)
+          matches = []
+
+          for path in symbol_dir.glob("*.json"):
+            data = json.loads(path.read_text())
+            for symbol in data.get("symbols", []):
+              names = symbol.get("names", {})
+              identifier = symbol.get("identifier", {})
+              haystack = " ".join(
+                str(value)
+                for value in [
+                  names.get("title"),
+                  names.get("subHeading"),
+                  identifier.get("precise"),
+                  symbol.get("kind", {}).get("identifier"),
+                ]
+                if value
+              )
+              if keywords.search(haystack):
+                matches.append(haystack)
+
+          if not matches:
+            print("No image/multimodal-looking FoundationModels symbols found.")
+          else:
+            for line in sorted(set(matches)):
+              print(line)
+          PY
