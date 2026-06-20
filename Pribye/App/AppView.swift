@@ -28,10 +28,10 @@ struct AppView: View {
     .task {
       showsUnsupportedAIAlert = !AppleIntelligenceAvailability().isSupported
     }
-    .alert("この端末ではAI解析を利用できません", isPresented: $showsUnsupportedAIAlert) {
+    .alert("Apple Intelligenceが必要です", isPresented: $showsUnsupportedAIAlert) {
       Button("OK", role: .cancel) {}
     } message: {
-      Text("プリバイはiOS 26以降のApple Intelligence対応端末を対象にしています。")
+      Text("プリバイの解析にはApple Intelligenceが必要です。対応端末では設定でApple Intelligenceをオンにしてから利用してください。")
     }
   }
 }

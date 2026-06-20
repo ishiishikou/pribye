@@ -47,10 +47,16 @@ struct TaskDetailView: View {
             .foregroundStyle(.secondary)
         } else {
           Text(task.evidenceText)
-          Button("ハイライトを表示") {
-            evidenceDocument = task.document
+          if task.evidenceObservationID == nil {
+            Text("根拠の位置情報がないため、ハイライトを表示できません")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          } else {
+            Button("ハイライトを表示") {
+              evidenceDocument = task.document
+            }
+              .disabled(task.document?.sourceImageState != .available)
           }
-            .disabled(task.document?.sourceImageState != .available)
         }
       }
 
@@ -262,6 +268,9 @@ struct DocumentDetailView: View {
     } catch DocumentAnalyzerError.unsupportedDevice {
       document.status = .failed
       document.failureReason = .unsupportedDevice
+    } catch DocumentAnalyzerError.malformedModelOutput {
+      document.status = .failed
+      document.failureReason = .extractionError
     } catch {
       document.status = .failed
       document.failureReason = .unknownError

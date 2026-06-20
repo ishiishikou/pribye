@@ -7,7 +7,7 @@ struct DocumentAnalysisPipeline {
   @MainActor
   func applyAnalysis(to document: DocumentRecord, snapshots: [OCRPageSnapshot]) async throws {
     let result = try await analyzePageScoped(snapshots)
-    let correctedTasks = await correctTaskEvidence(result.tasks, in: snapshots)
+    let correctedTasks = try await correctTaskEvidence(result.tasks, in: snapshots)
 
     document.title = result.documentTitle
     document.tasks = correctedTasks.map { draft in
@@ -60,7 +60,7 @@ struct DocumentAnalysisPipeline {
     )
   }
 
-  private func correctTaskEvidence(_ tasks: [TaskDraft], in snapshots: [OCRPageSnapshot]) async -> [TaskDraft] {
+  private func correctTaskEvidence(_ tasks: [TaskDraft], in snapshots: [OCRPageSnapshot]) async throws -> [TaskDraft] {
     var correctedTasks = tasks
     var correctedEvidenceByObservationID: [UUID: String] = [:]
 
@@ -79,7 +79,7 @@ struct DocumentAnalysisPipeline {
         continue
       }
 
-      let correctedSnapshots = await ocrCorrector.correct(pages: contextSnapshots)
+      let correctedSnapshots = try await ocrCorrector.correct(pages: contextSnapshots)
       guard let correctedText = correctedSnapshots
         .flatMap(\.observations)
         .first(where: { $0.id == evidenceObservationID })?

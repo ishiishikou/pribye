@@ -23,6 +23,16 @@ struct EmptyStateView: View {
   }
 }
 
+struct AppleIntelligenceUnavailableView: View {
+  var body: some View {
+    ContentUnavailableView {
+      Label("Apple Intelligenceが必要です", systemImage: "sparkles")
+    } description: {
+      Text("設定でApple Intelligenceをオンにしてから、もう一度プリントを取り込んでください。")
+    }
+  }
+}
+
 struct AdBannerPlaceholder: View {
   @AppStorage("adsRemoved") private var adsRemoved = false
 

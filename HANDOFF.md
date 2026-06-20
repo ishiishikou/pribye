@@ -197,9 +197,7 @@ UI方針:
   - `FoundationModels` framework が利用できる場合、タスク化された根拠行だけをオンデバイス補正
   - 根拠行の前後行、ページ境界では隣接ページの近接行も文脈として渡す
   - 補正文はOCR結果欄には表示せず、タスクの根拠テキストとして表示する
-  - 補正失敗、Apple Intelligence利用不可、モデル未準備の場合は元OCRテキストをそのまま利用
-- `HeuristicDocumentAnalyzer`
-  - 旧fallback用の簡易抽出器。現在のアプリ本体では自動fallbackとして使わない
+  - 補正失敗、Apple Intelligence利用不可、モデル未準備、モデル出力不正の場合は元OCRテキストへフォールバックせず、解析失敗として表示する
 - `DateRangeParser`
   - `6月20日まで`、`6/15〜6/20` などを解析
 - `EventKitCalendarService`
@@ -228,7 +226,7 @@ UI方針:
 対象:
 
 - 日付/期間パース
-- ヒューリスティックAI抽出
+- Foundation Models利用不可時に解析失敗になること
 - タスク完了状態とライフサイクル
 - Document状態表示
 - 四隅補正座標の保存
@@ -261,7 +259,9 @@ CIを通すために以下を修正済み:
 
 - `canImport(FoundationModels)` の環境では `LanguageModelSession.respond(to:generating:includeSchemaInPrompt:options:)` を使用。
 - 出力は `@Generable` DTOで受け、既存の `AnalysisResult` / `TaskDraft` に変換。
-- Foundation Models が利用不可の場合は `HeuristicDocumentAnalyzer` にフォールバックしない。解析失敗として見せる。
+- Foundation Models が利用不可の場合はフォールバックしない。Apple Intelligenceをオンにする案内または解析失敗として見せる。
+- `HeuristicDocumentAnalyzer` は削除済み。低精度fallbackを復活させない。
+- Apple Intelligence非対応端末は配布対象外にしたい方針。ただしApple Intelligence専用の `UIRequiredDeviceCapabilities` キーは未確認のため、現時点ではInfo.plistへ推測追加しない。Xcode/Apple資料で確認するまでは、アプリ内の `AppleIntelligenceAvailability` による利用ブロックで対応する。
 
 注意:
 

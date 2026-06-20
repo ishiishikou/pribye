@@ -73,7 +73,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
           Text("Apple Intelligence")
             .font(.headline)
-          Text(AppleIntelligenceAvailability().isSupported ? "この端末ではAI解析を利用できます" : "この端末ではAI解析を利用できません")
+          Text(AppleIntelligenceAvailability().isSupported ? "この端末ではAI解析を利用できます" : "設定でApple Intelligenceをオンにしてから利用してください")
             .foregroundStyle(.secondary)
         }
       }

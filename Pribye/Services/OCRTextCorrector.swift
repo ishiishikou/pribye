@@ -4,7 +4,7 @@ import FoundationModels
 #endif
 
 protocol OCRTextCorrector: Sendable {
-  func correct(pages: [OCRPageSnapshot]) async -> [OCRPageSnapshot]
+  func correct(pages: [OCRPageSnapshot]) async throws -> [OCRPageSnapshot]
 }
 
 struct FoundationModelsOCRTextCorrector: OCRTextCorrector {
@@ -14,17 +14,13 @@ struct FoundationModelsOCRTextCorrector: OCRTextCorrector {
     self.availability = availability
   }
 
-  func correct(pages: [OCRPageSnapshot]) async -> [OCRPageSnapshot] {
+  func correct(pages: [OCRPageSnapshot]) async throws -> [OCRPageSnapshot] {
     #if canImport(FoundationModels)
     if #available(iOS 26.0, *), availability.isSupported {
-      do {
-        return try await correctWithFoundationModels(pages: pages)
-      } catch {
-        return pages
-      }
+      return try await correctWithFoundationModels(pages: pages)
     }
     #endif
-    return pages
+    throw DocumentAnalyzerError.unsupportedDevice
   }
 
   #if canImport(FoundationModels)
@@ -46,7 +42,7 @@ struct FoundationModelsOCRTextCorrector: OCRTextCorrector {
       includeSchemaInPrompt: true
     )
 
-    return response.content.correctedSnapshots(from: pages)
+    return try response.content.correctedSnapshots(from: pages)
   }
 
   private func makeCorrectionPrompt(pages: [OCRPageSnapshot]) -> String {
@@ -86,7 +82,7 @@ private struct FoundationModelOCRCorrectionOutput {
   @Guide(description: "Corrected OCR lines, preserving the original observation IDs")
   var observations: [FoundationModelCorrectedOCRObservation]
 
-  func correctedSnapshots(from originalPages: [OCRPageSnapshot]) -> [OCRPageSnapshot] {
+  func correctedSnapshots(from originalPages: [OCRPageSnapshot]) throws -> [OCRPageSnapshot] {
     var correctedTextByID: [UUID: String] = [:]
     for observation in observations {
       guard let id = UUID(uuidString: observation.id) else {
@@ -98,19 +94,24 @@ private struct FoundationModelOCRCorrectionOutput {
       }
     }
 
-    return originalPages.map { page in
-      let correctedObservations = page.observations.map { observation in
-        OCRObservationSnapshot(
-          id: observation.id,
-          text: correctedTextByID[observation.id] ?? observation.text
-        )
+    var correctedPages: [OCRPageSnapshot] = []
+    for page in originalPages {
+      var correctedObservations: [OCRObservationSnapshot] = []
+      for observation in page.observations {
+        guard let correctedText = correctedTextByID[observation.id] else {
+          throw DocumentAnalyzerError.malformedModelOutput
+        }
+        correctedObservations.append(OCRObservationSnapshot(id: observation.id, text: correctedText))
       }
-      return OCRPageSnapshot(
-        pageIndex: page.pageIndex,
-        text: correctedObservations.map(\.text).joined(separator: "\n"),
-        observations: correctedObservations
+      correctedPages.append(
+        OCRPageSnapshot(
+          pageIndex: page.pageIndex,
+          text: correctedObservations.map(\.text).joined(separator: "\n"),
+          observations: correctedObservations
+        )
       )
     }
+    return correctedPages
   }
 }
 

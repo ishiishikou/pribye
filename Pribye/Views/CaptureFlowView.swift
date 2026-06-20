@@ -85,7 +85,16 @@ struct CaptureFlowView: View {
     }
   }
 
+  @ViewBuilder
   private var inputView: some View {
+    if AppleIntelligenceAvailability().isSupported {
+      inputActionsView
+    } else {
+      AppleIntelligenceUnavailableView()
+    }
+  }
+
+  private var inputActionsView: some View {
     VStack(spacing: 24) {
       Image(systemName: "camera.viewfinder")
         .font(.system(size: 56))
@@ -328,6 +337,9 @@ struct CaptureFlowView: View {
     } catch DocumentAnalyzerError.unsupportedDevice {
       document.status = .failed
       document.failureReason = .unsupportedDevice
+    } catch DocumentAnalyzerError.malformedModelOutput {
+      document.status = .failed
+      document.failureReason = .extractionError
     } catch ImageAssetError.photoAccessDenied {
       document.status = .failed
       document.failureReason = .imageError

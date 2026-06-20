@@ -26,7 +26,7 @@
 - If using CI upload, create an App Store Connect API key and store signing assets in GitHub Actions secrets.
 - Verify VisionKit multi-page document scanning, page switching during correction, OCR, page-scoped task extraction, task completion, calendar registration, and CSV export.
 - Verify permission prompts for Camera, Photos, and Calendar on a real device.
-- Verify Foundation Models integration using `docs/FOUNDATION_MODELS_SETUP.md` before replacing the heuristic fallback.
+- Verify Foundation Models integration and Apple Intelligence unavailable guidance using `docs/FOUNDATION_MODELS_SETUP.md`.
 
 ## Privacy / Ads / Purchases
 - Do not send print images, OCR text, or extracted task content to external AI APIs.

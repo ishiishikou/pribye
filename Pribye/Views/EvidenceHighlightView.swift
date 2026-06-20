@@ -9,6 +9,7 @@ struct EvidenceHighlightView: View {
   @State private var sourceImage: UIImage?
   @State private var sourceState: SourceImageState = .available
   @State private var isLoading = true
+  @State private var unavailableMessage: String?
 
   private let imageAssetService = ImageAssetService()
 
@@ -20,6 +21,8 @@ struct EvidenceHighlightView: View {
         if isLoading {
           ProgressView("元画像を確認中")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let unavailableMessage {
+          ContentUnavailableView(unavailableMessage, systemImage: "text.viewfinder")
         } else if let sourceImage, sourceState == .available {
           EvidenceImageCanvas(image: sourceImage, observations: highlightedObservations)
         } else {
@@ -58,33 +61,34 @@ struct EvidenceHighlightView: View {
   }
 
   private var highlightedObservations: [OCRObservationRecord] {
-    let observations = highlightedPage?.observations ?? document.pages.flatMap(\.observations)
-    if let evidenceObservationID = task.evidenceObservationID,
-       let observation = observations.first(where: { $0.id == evidenceObservationID }) {
-      return [observation]
-    }
-    guard !task.evidenceText.isEmpty else {
+    guard let evidenceObservationID = task.evidenceObservationID,
+          let observations = highlightedPage?.observations,
+          let observation = observations.first(where: { $0.id == evidenceObservationID }) else {
       return []
     }
-    return observations.filter {
-      task.evidenceText.contains($0.text) || $0.text.contains(task.evidenceText)
-    }
+    return [observation]
   }
 
   private var highlightedPage: PageRecord? {
-    if let evidenceObservationID = task.evidenceObservationID {
-      return document.pages.first { page in
-        page.observations.contains { $0.id == evidenceObservationID }
-      }
-    }
-    guard !task.evidenceText.isEmpty else {
+    guard let evidenceObservationID = task.evidenceObservationID else {
       return nil
     }
     return document.pages.first { page in
-      page.observations.contains {
-        task.evidenceText.contains($0.text) || $0.text.contains(task.evidenceText)
-      }
+      page.observations.contains { $0.id == evidenceObservationID }
     }
+  }
+
+  private var missingHighlightMessage: String? {
+    guard task.evidenceObservationID != nil else {
+      return "根拠の位置情報がないため、ハイライトを表示できません"
+    }
+    guard highlightedPage != nil else {
+      return "根拠に対応するページが見つからないため、ハイライトを表示できません"
+    }
+    guard !highlightedObservations.isEmpty else {
+      return "根拠に対応する行が見つからないため、ハイライトを表示できません"
+    }
+    return nil
   }
 
   @MainActor
@@ -92,12 +96,20 @@ struct EvidenceHighlightView: View {
     isLoading = true
     defer { isLoading = false }
 
-    let result: ImageAssetStateResult
-    if let highlightedPage {
-      result = await imageAssetService.loadVerifiedImage(for: highlightedPage)
-    } else {
-      result = await imageAssetService.loadVerifiedImage(for: document)
+    if let missingHighlightMessage {
+      unavailableMessage = missingHighlightMessage
+      sourceImage = nil
+      return
     }
+
+    guard let highlightedPage else {
+      unavailableMessage = "根拠に対応するページが見つからないため、ハイライトを表示できません"
+      sourceImage = nil
+      return
+    }
+
+    unavailableMessage = nil
+    let result = await imageAssetService.loadVerifiedImage(for: highlightedPage)
     sourceImage = result.image
     sourceState = result.state
     document.sourceImageState = result.state
