@@ -295,7 +295,8 @@ automation:
 重要な運用:
 
 - `input/改善要望_TEMPLATE.md` はタスク化しない。
-- `input/改善要望_*.md`、GitHub PR、GitHub Actions失敗runを確認する。
+- `input/改善要望_*.md` のうちテンプレートを除くローカル作業ファイル、GitHub PR、GitHub Actions失敗runを確認する。
+- 個別の改善要望マークダウンはGit管理せず、テンプレートだけGit管理する。
 - 改善案レビュー、CI失敗分析、commit前レビューは `gpt-5.5`、または利用可能な最上位モデルで行う。
 - commit前レビューが通らない場合はcommitしない。
 - pushは、タスク完了、未解決確認なし、review済みcommitのみの状態に加えて、ユーザーがその時点で明示的にpushを承認している場合のみ行う。

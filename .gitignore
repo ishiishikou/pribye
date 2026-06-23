@@ -9,6 +9,8 @@ build/
 *.xcscmblueprint
 .codex-local/
 input/改善要望.md
+input/改善要望_*
+!input/改善要望_TEMPLATE.md
 *.p8
 *.p12
 *.mobileprovision

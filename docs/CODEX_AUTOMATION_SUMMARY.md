@@ -9,7 +9,7 @@
 - automation表示名: `Pribye AM3 Task Runner`
 - automation ID: `pribye-am3-task-runner`
 - 実行時刻: 毎日 日本時間AM3:00
-- 入力元: `input/改善要望_*.md`、GitHub PR、GitHub Actions失敗run
+- 入力元: `input/改善要望_*.md` のうちテンプレートを除くローカル作業ファイル、GitHub PR、GitHub Actions失敗run
 - テンプレート: `input/改善要望_TEMPLATE.md`
 - タスク台帳: `docs/CODEX_TASKS.md`
 - 確認待ち: `docs/CODEX_PENDING_CONFIRMATIONS.md`
@@ -18,7 +18,7 @@
 ## 重要な判断
 
 - `input/改善要望_TEMPLATE.md` はタスク化対象から除外する。
-- 改善要望は `input/改善要望_YYYYMMDD_短い名前.md` として追加する。
+- 改善要望は `input/改善要望_YYYYMMDD_短い名前.md` としてローカル追加し、Git管理しない。
 - commit前レビューは `gpt-5.5`、または利用可能な最上位モデルで行う。
 - GitHub Actions失敗は `CI修正` タスクとして `docs/CODEX_TASKS.md` に追加する。
 - GitHub Actions全文ログや日次詳細ログはGit管理しない。

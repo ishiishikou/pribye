@@ -4,9 +4,9 @@
 
 ## 運用ルール
 
-- `input/改善要望_*.md` を改善要望の入力として扱う。
+- `input/改善要望_*.md` のうち、`input/改善要望_TEMPLATE.md` を除くローカル作業ファイルを改善要望の入力として扱う。
 - `input/改善要望_TEMPLATE.md` はテンプレートなのでタスク化しない。
-- `input/改善要望.md` は旧入口として扱い、自動タスク化の主対象にはしない。
+- 個別の改善要望マークダウンはGit管理しない。必要ならテンプレートからローカル作成する。
 - GitHub PR と GitHub Actions の失敗runも毎日確認する。
 - 未記入項目や仕様判断が必要な場合は推測せず、`docs/CODEX_PENDING_CONFIRMATIONS.md` に確認事項を残す。
 - commit前レビューは必ず `gpt-5.5`、または利用可能な最上位モデルで行う。
@@ -22,4 +22,3 @@
 
 | id | source | status | assigned_model | success_criteria | verification | review_result |
 | --- | --- | --- | --- | --- | --- | --- |
-
