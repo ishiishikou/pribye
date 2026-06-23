@@ -267,6 +267,39 @@ CIを通すために以下を修正済み:
 
 ## 現在の重要な制約
 
+### Codex AM3タスク運用
+
+Codexのレート制限とGitHub Actions無料枠を節約するため、AM3自動実行の運用を追加済み。
+
+関連ファイル:
+
+- `input/改善要望_TEMPLATE.md`
+  - 改善要望の記入テンプレート
+  - コピーして `input/改善要望_YYYYMMDD_短い名前.md` として追加する
+- `docs/CODEX_TASKS.md`
+  - 改善要望、GitHub PR、GitHub Actions失敗runをタスク化する台帳
+- `docs/CODEX_PENDING_CONFIRMATIONS.md`
+  - 無人実行中にユーザー確認が必要になった内容を記録する
+- `docs/CODEX_AUTOMATION_SUMMARY.md`
+  - AM3自動実行の重要な判断、完了事項、次回へ残す要点だけを記録する
+- `.codex-local/`
+  - 詳細ログ、レート制限確認結果、GitHub Actions全文ログ、一時メモなどのローカル専用置き場。Git管理しない
+
+automation:
+
+- 表示名: `Pribye AM3 Task Runner`
+- ID: `pribye-am3-task-runner`
+- 実行時刻: 毎日 日本時間AM3:00
+- model: `gpt-5.4-mini`
+
+重要な運用:
+
+- `input/改善要望_TEMPLATE.md` はタスク化しない。
+- `input/改善要望_*.md`、GitHub PR、GitHub Actions失敗runを確認する。
+- 改善案レビュー、CI失敗分析、commit前レビューは `gpt-5.5`、または利用可能な最上位モデルで行う。
+- commit前レビューが通らない場合はcommitしない。
+- pushは、タスク完了、未解決確認なし、review済みcommitのみの状態に加えて、ユーザーがその時点で明示的にpushを承認している場合のみ行う。
+
 ### Foundation Models
 
 `FoundationModelsDocumentAnalyzer` は条件付きで実API接続済みです。

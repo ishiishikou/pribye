@@ -7,3 +7,8 @@ build/
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
+.codex-local/
+input/改善要望.md
+*.p8
+*.p12
+*.mobileprovision
