@@ -89,4 +89,8 @@ final class TabRouter {
       set: { router.path = $0 }
     )
   }
+
+  func replacePath(for tab: AppTab, with path: [Route]) {
+    router(for: tab).path = path
+  }
 }

@@ -17,4 +17,4 @@ AM3自動実行中にユーザー確認が必要になった場合、このフ�
 
 | id | related_task | answer | resolved_at |
 | --- | --- | --- | --- |
-
+| pc-20260624-notification-bg-exec | task-20260624-notification | TestFlight で先に技術検証してOK。ただし、Apple公式ドキュメントもみてほしい | 2026-06-24T17:45 |

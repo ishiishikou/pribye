@@ -26,6 +26,7 @@ enum CapturedPageSource {
 struct CaptureFlowView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
+  @Environment(AnalysisNotificationStore.self) private var analysisNotifications
   var onAnalysisStarted: () -> Void = {}
 
   @State private var step: CaptureStep = .input
@@ -277,6 +278,7 @@ struct CaptureFlowView: View {
     onAnalysisStarted()
 
     Task { @MainActor in
+      await analysisNotifications.requestAuthorizationIfNeeded()
       await analyzeCapturedPages(pages, into: document)
     }
   }
@@ -335,28 +337,46 @@ struct CaptureFlowView: View {
       document.status = .aiProcessing
 
       try await analysisPipeline.applyAnalysis(to: document, snapshots: rawSnapshots)
+      await deliverAnalysisCompletion(for: document, outcome: .success)
     } catch DocumentAnalyzerError.noActionableTasks {
       document.status = .failed
       document.failureReason = .extractionError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch DocumentAnalyzerError.unsupportedDevice {
       document.status = .failed
       document.failureReason = .unsupportedDevice
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch DocumentAnalyzerError.malformedModelOutput {
       document.status = .failed
       document.failureReason = .extractionError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch ImageAssetError.photoAccessDenied {
       document.status = .failed
       document.failureReason = .imageError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch ImageAssetError.imageLoadFailed {
       document.status = .failed
       document.failureReason = .imageError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch ImageAssetError.correctionFailed {
       document.status = .failed
       document.failureReason = .imageError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch {
       document.status = .failed
       document.failureReason = .unknownError
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
     }
+  }
+
+  @MainActor
+  private func deliverAnalysisCompletion(
+    for document: DocumentRecord,
+    outcome: AnalysisNotificationOutcome
+  ) async {
+    await analysisNotifications.deliver(
+      AnalysisCompletionNotification(documentID: document.id, outcome: outcome)
+    )
   }
 
   private func saveImageReference(_ image: UIImage, source: CapturedPageSource) async throws -> StoredImageReference {

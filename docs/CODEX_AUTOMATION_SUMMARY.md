@@ -28,8 +28,14 @@
 
 | date | summary |
 | --- | --- |
+| 2026-06-24 | `AI解析モデルの差し替え` と `通知機能追加` を task 化し、通知は Apple公式ドキュメント確認と TestFlight での背景実行成立性検証を先行する方針にした。GitHub PR は open/all ともに 0 件、最新失敗 run は `27874312688` で `ModelStateTests` の期待値不一致だった。 |
+| 2026-06-25 | Apple公式ドキュメントを確認し、`User Notifications` はローカル通知をサポートするが配信保証はないこと、`Background Tasks` は framework-provided task で数分規模の背景処理を扱うこと、`beginBackgroundTask` は有限時間で明示終了が必要なことを確認した。 |
+| 2026-06-25 | GitHub PR は 0 件、最新 Actions は iOS run `27887769614` と TestFlight run `27887824899` が成功済みで、新規 CI 修正タスクはなし。通知機能は前面バナー、初回解析開始時の通知許可要求、背景時のローカル通知要求、成功/失敗のタブ遷移ロジック、通知タップのbufferingまで実装した。 |
 
 ## 次回へ残す要点
 
 | date | note |
 | --- | --- |
+| 2026-06-24 | 通知機能は Apple公式ドキュメント確認後、TestFlight で背景実行の成立性を技術検証して継続可否を決める。CI 失敗は既に後続 run `27874656339` で解消済み。 |
+| 2026-06-25 | 通知機能はまだ「確実通知」とは言えない。TestFlight で OCR + Foundation Models の背景完走可否を検証し、成立しない場合は要件を best-effort に落とすか設計見直しが必要。 |
+| 2026-06-25 | 通知機能の iOS build、前面バナー表示、通知許可ダイアログ、背景ローカル通知、システム通知タップ遷移は TestFlight または Xcode 26 環境で確認が必要。 |

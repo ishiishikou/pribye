@@ -229,6 +229,11 @@ UI方針:
 - `PurchaseService`
   - StoreKit 2で広告非表示課金 `com.pribye.remove_ads` の読み込み、購入、復元
   - StoreKit transaction updates を監視し、購入状態を `adsRemoved` に反映
+- `AnalysisNotificationService`
+  - 新規取込と再解析の解析開始時に通知許可を初回だけ要求
+  - 解析成功/失敗時に、アプリ前面では画面上部バナー、背景では抽象文言のローカル通知を出す
+  - 通知タップは cold start でも取りこぼしにくいよう inbox にbufferし、成功はタスクタブ、失敗は対象プリント詳細へ遷移する
+  - 背景中に OCR + Foundation Models が完走する保証は未検証。TestFlight または Xcode 26 環境で確認が必要
 
 ### テスト
 
@@ -381,7 +386,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 優先度順:
 
 1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析を確認する。
+2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析、解析完了通知の前面バナー/背景通知/通知タップ遷移を確認する。
 3. `AI実験` タブでプロンプトとOCR文章を入力し、Apple Intelligenceの自由応答を実機確認する。
 4. 開発中設定の要約プロンプト欄と `AI実験` タブで、短い段階プロンプト方式の抽出精度を実機調整する。
 5. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。

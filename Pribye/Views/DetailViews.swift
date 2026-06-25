@@ -136,6 +136,7 @@ struct DocumentDetailView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
   @Environment(RouterPath.self) private var router
+  @Environment(AnalysisNotificationStore.self) private var analysisNotifications
   @Bindable var document: DocumentRecord
   @State private var isReanalyzing = false
   @State private var isShowingDeleteConfirmation = false
@@ -287,6 +288,7 @@ struct DocumentDetailView: View {
 
     isReanalyzing = true
     defer { isReanalyzing = false }
+    await analysisNotifications.requestAuthorizationIfNeeded()
 
     let oldTasks = document.tasks
     document.tasks.removeAll()
@@ -299,19 +301,31 @@ struct DocumentDetailView: View {
 
     do {
       try await analysisPipeline.applyAnalysis(to: document, snapshots: snapshots)
+      await deliverAnalysisCompletion(outcome: .success)
     } catch DocumentAnalyzerError.noActionableTasks {
       document.status = .failed
       document.failureReason = .extractionError
+      await deliverAnalysisCompletion(outcome: .failure)
     } catch DocumentAnalyzerError.unsupportedDevice {
       document.status = .failed
       document.failureReason = .unsupportedDevice
+      await deliverAnalysisCompletion(outcome: .failure)
     } catch DocumentAnalyzerError.malformedModelOutput {
       document.status = .failed
       document.failureReason = .extractionError
+      await deliverAnalysisCompletion(outcome: .failure)
     } catch {
       document.status = .failed
       document.failureReason = .unknownError
+      await deliverAnalysisCompletion(outcome: .failure)
     }
+  }
+
+  @MainActor
+  private func deliverAnalysisCompletion(outcome: AnalysisNotificationOutcome) async {
+    await analysisNotifications.deliver(
+      AnalysisCompletionNotification(documentID: document.id, outcome: outcome)
+    )
   }
 
   @MainActor

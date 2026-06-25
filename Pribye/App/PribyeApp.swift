@@ -4,6 +4,7 @@ import GoogleMobileAds
 #endif
 import SwiftData
 import SwiftUI
+import UserNotifications
 
 @main
 struct PribyeApp: App {
@@ -15,6 +16,7 @@ struct PribyeApp: App {
     #if canImport(GoogleMobileAds)
     MobileAds.shared.start()
     #endif
+    UNUserNotificationCenter.current().delegate = AnalysisNotificationDelegate.shared
   }
 
   var body: some Scene {
