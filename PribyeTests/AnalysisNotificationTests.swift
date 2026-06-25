@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Pribye
 
 final class AnalysisNotificationTests: XCTestCase {
@@ -56,5 +57,41 @@ final class AnalysisNotificationTests: XCTestCase {
 
     XCTAssertEqual(AnalysisNotificationTapInbox.shared.drain(), [notification])
     XCTAssertTrue(AnalysisNotificationTapInbox.shared.drain().isEmpty)
+  }
+
+  @MainActor
+  func testStoreDeliversForegroundNotificationWhenSceneIsActive() async {
+    let service = RecordingAnalysisNotificationService()
+    let store = AnalysisNotificationStore(service: service)
+    let notification = AnalysisCompletionNotification(documentID: UUID(), outcome: .success)
+
+    await store.deliver(notification)
+
+    XCTAssertEqual(store.foregroundNotification, notification)
+    XCTAssertTrue(service.scheduledNotifications.isEmpty)
+  }
+
+  @MainActor
+  func testStoreSchedulesLocalNotificationWhenSceneIsInBackground() async {
+    let service = RecordingAnalysisNotificationService()
+    let store = AnalysisNotificationStore(service: service)
+    let notification = AnalysisCompletionNotification(documentID: UUID(), outcome: .failure)
+
+    store.updateScenePhase(.background)
+    await store.deliver(notification)
+
+    XCTAssertNil(store.foregroundNotification)
+    XCTAssertEqual(service.scheduledNotifications, [notification])
+  }
+}
+
+@MainActor
+private final class RecordingAnalysisNotificationService: AnalysisNotificationServiceProtocol {
+  private(set) var scheduledNotifications: [AnalysisCompletionNotification] = []
+
+  func requestAuthorizationIfNeeded() async {}
+
+  func scheduleLocalCompletionNotification(_ notification: AnalysisCompletionNotification) async {
+    scheduledNotifications.append(notification)
   }
 }
