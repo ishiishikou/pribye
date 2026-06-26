@@ -67,8 +67,10 @@ final class AnalysisNotificationTests: XCTestCase {
 
     await store.deliver(notification)
 
-    XCTAssertEqual(store.foregroundNotification, notification)
-    XCTAssertTrue(service.scheduledNotifications.isEmpty)
+    let foregroundNotification = store.foregroundNotification
+    let scheduledNotifications = service.scheduledNotifications
+    XCTAssertEqual(foregroundNotification, notification)
+    XCTAssertTrue(scheduledNotifications.isEmpty)
   }
 
   @MainActor
@@ -80,8 +82,10 @@ final class AnalysisNotificationTests: XCTestCase {
     store.updateScenePhase(.background)
     await store.deliver(notification)
 
-    XCTAssertNil(store.foregroundNotification)
-    XCTAssertEqual(service.scheduledNotifications, [notification])
+    let foregroundNotification = store.foregroundNotification
+    let scheduledNotifications = service.scheduledNotifications
+    XCTAssertNil(foregroundNotification)
+    XCTAssertEqual(scheduledNotifications, [notification])
   }
 }
 
