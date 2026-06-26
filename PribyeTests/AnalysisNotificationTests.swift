@@ -55,8 +55,10 @@ final class AnalysisNotificationTests: XCTestCase {
 
     AnalysisNotificationTapInbox.shared.enqueue(notification)
 
-    XCTAssertEqual(AnalysisNotificationTapInbox.shared.drain(), [notification])
-    XCTAssertTrue(AnalysisNotificationTapInbox.shared.drain().isEmpty)
+    let drainedNotifications = AnalysisNotificationTapInbox.shared.drain()
+    let remainingNotifications = AnalysisNotificationTapInbox.shared.drain()
+    XCTAssertEqual(drainedNotifications, [notification])
+    XCTAssertTrue(remainingNotifications.isEmpty)
   }
 
   @MainActor
