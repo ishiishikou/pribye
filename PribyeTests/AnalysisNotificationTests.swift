@@ -50,13 +50,13 @@ final class AnalysisNotificationTests: XCTestCase {
 
   @MainActor
   func testTapInboxBuffersNotificationUntilDrained() {
-    _ = AnalysisNotificationTapInbox.shared.drain()
+    let inbox = AnalysisNotificationTapInbox()
     let notification = AnalysisCompletionNotification(documentID: UUID(), outcome: .success)
 
-    AnalysisNotificationTapInbox.shared.enqueue(notification)
+    inbox.enqueue(notification)
 
-    let drainedNotifications = AnalysisNotificationTapInbox.shared.drain()
-    let remainingNotifications = AnalysisNotificationTapInbox.shared.drain()
+    let drainedNotifications = inbox.drain()
+    let remainingNotifications = inbox.drain()
     XCTAssertEqual(drainedNotifications, [notification])
     XCTAssertTrue(remainingNotifications.isEmpty)
   }

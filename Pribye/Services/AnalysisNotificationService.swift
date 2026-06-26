@@ -88,7 +88,7 @@ final class AnalysisNotificationTapInbox {
 
   private var pendingNotifications: [AnalysisCompletionNotification] = []
 
-  private init() {}
+  init() {}
 
   func enqueue(_ notification: AnalysisCompletionNotification) {
     pendingNotifications.append(notification)
