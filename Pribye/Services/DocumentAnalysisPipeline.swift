@@ -1,7 +1,7 @@
 import Foundation
 
 struct DocumentAnalysisPipeline {
-  var analyzer: DocumentAnalyzer = FoundationModelsDocumentAnalyzer()
+  var analyzer: DocumentAnalyzer = GemmaDocumentAnalyzer()
 
   @MainActor
   func applyAnalysis(to document: DocumentRecord, snapshots: [OCRPageSnapshot]) async throws {
@@ -47,7 +47,7 @@ struct DocumentAnalysisPipeline {
       }
     }
 
-    let uniqueTasks = deduplicatedTasks(tasks)
+    let uniqueTasks = analyzer.shouldDeduplicateTasks ? deduplicatedTasks(tasks) : tasks
     guard !uniqueTasks.isEmpty else {
       throw DocumentAnalyzerError.noActionableTasks
     }
@@ -65,9 +65,9 @@ struct DocumentAnalysisPipeline {
 
     var scopedSnapshots = [snapshots[targetIndex]]
     let nextIndex = targetIndex + 1
-    if snapshots.indices.contains(nextIndex) {
+    if snapshots.indices.contains(nextIndex), shouldIncludeContext(after: snapshots[targetIndex]) {
       let nextPage = snapshots[nextIndex]
-      let contextObservations = Array(nextPage.observations.prefix(3))
+      let contextObservations = leadingContextObservations(from: nextPage)
       if !contextObservations.isEmpty {
         scopedSnapshots.append(OCRPageSnapshot(
           pageIndex: nextPage.pageIndex,
@@ -77,6 +77,44 @@ struct DocumentAnalysisPipeline {
       }
     }
     return scopedSnapshots
+  }
+
+  private func shouldIncludeContext(after targetPage: OCRPageSnapshot) -> Bool {
+    let lastLine = targetPage.text
+      .components(separatedBy: .newlines)
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .last { !$0.isEmpty } ?? ""
+    guard !lastLine.isEmpty else {
+      return false
+    }
+
+    let explicitContinuationMarkers = [
+      "続く", "つづく", "次頁", "次ページ", "次のページ", "以下", "下記", "別紙", "裏面"
+    ]
+    if explicitContinuationMarkers.contains(where: { lastLine.contains($0) }) {
+      return true
+    }
+
+    guard let lastCharacter = lastLine.last else {
+      return false
+    }
+    return ["、", ",", "，", "・", ":", "：", "（", "(", "「", "『", "【"].contains(lastCharacter)
+  }
+
+  private func leadingContextObservations(from page: OCRPageSnapshot) -> [OCRObservationSnapshot] {
+    if !page.observations.isEmpty {
+      return Array(page.observations.prefix(3))
+    }
+
+    let lines = page.text
+      .components(separatedBy: .newlines)
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+      .prefix(3)
+
+    return lines.map { line in
+      OCRObservationSnapshot(id: UUID(), text: line)
+    }
   }
 
   private func deduplicatedTasks(_ tasks: [TaskDraft]) -> [TaskDraft] {

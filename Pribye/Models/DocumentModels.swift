@@ -45,6 +45,8 @@ enum AnalysisFailureReason: String, Codable, CaseIterable, Error {
   case ocrError = "OCR_ERROR"
   case extractionError = "EXTRACTION_ERROR"
   case unsupportedDevice = "UNSUPPORTED_DEVICE"
+  case modelNotReady = "MODEL_NOT_READY"
+  case modelLoadFailed = "MODEL_LOAD_FAILED"
   case unknownError = "UNKNOWN_ERROR"
 
   var message: String {
@@ -57,6 +59,10 @@ enum AnalysisFailureReason: String, Codable, CaseIterable, Error {
       return "このプリントからタスクを抽出できませんでした。"
     case .unsupportedDevice:
       return "この端末ではAI解析を利用できません。"
+    case .modelNotReady:
+      return "AIモデルをダウンロードしてください。"
+    case .modelLoadFailed:
+      return "AIモデルの読み込みに失敗しました。"
     case .unknownError:
       return "解析中にエラーが発生しました。"
     }

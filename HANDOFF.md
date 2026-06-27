@@ -38,9 +38,10 @@ Repository:
 GitHub Actions:
 
 - workflow: `.github/workflows/ios.yml`
-- `xcodegen generate` と `xcodebuild test` を macOS runner で実行
+  - `workflow_dispatch` の手動実行のみ
+  - `xcodegen generate` と `xcodebuild test` を macOS runner で実行
 - workflow: `.github/workflows/testflight.yml`
-- TestFlight upload用workflow。`workflow_dispatch` の手動実行に加え、`iOS` workflowが`main`へのpushで成功した場合に自動実行する。
+  - TestFlight upload用workflow。`workflow_dispatch` の手動実行のみ
 - 確認済みの成功run:
   - `27737585159` `Document TestFlight upload preparation`
   - `27737437580` `Mark Bundle ID registration complete`
@@ -50,7 +51,7 @@ GitHub Actions:
 注意:
 
 - private repository の GitHub-hosted macOS runner は GitHub Actions の無料枠を消費する。
-- `main` へのpushでiOS CIが走り、成功するとTestFlight Uploadも続けて走るため、無料枠節約のため、次チャットでは必要なときだけpushする。
+- workflow はすべて手動実行のみ。push しても GitHub Actions は自動起動しない。
 - ローカルcommitだけならGitHub Actionsは走らない。
 
 ## Apple Developer / App Store Connect 状態
@@ -104,10 +105,9 @@ GitHub Actions:
   - `Pribye` app target
   - `PribyeTests` unit test target
 - `.github/workflows/ios.yml`
-  - GitHub Actions macOS runnerで `xcodegen generate` と `xcodebuild test` を実行
+  - GitHub Actions macOS runnerで `xcodegen generate` と `xcodebuild test` を手動実行
 - `.github/workflows/testflight.yml`
   - GitHub Actions macOS runnerで署名付きarchiveを作成し、TestFlightへuploadする手動実行workflow
-  - 手動実行に加え、`iOS` workflowが`main`へのpushで成功した場合に自動実行
 - `.gitignore`
 - `README.md`
 - `docs/APP_STORE_CHECKLIST.md`
@@ -198,6 +198,7 @@ UI方針:
   - 期限/期間はAIに日付形式を要求せず、抽出タスク本文を `DateRangeParser` でローカル解析する
   - 複数ページプリントでは、全ページ一括投入ではなく、対象ページ + 次ページ冒頭の文脈でページ単位解析する
   - SDK未解決、Apple Intelligence利用不可、モデル未準備の場合はフォールバックせず、解析失敗として表示する
+  - 現在は本番経路ではなく、開発・比較用として残している
   - 開発中は設定画面の `要約プロンプト` で最初の要約ステップだけを上書きできる。既定値は `要約してください`。App Store提出前にこの入力欄は削除する
 - `AppleIntelligenceChatService`
   - 開発用 `AI実験` タブ専用。`LanguageModelSession` の自由応答で、プロンプト + OCR文章に対するApple Intelligenceの回答を確認する
@@ -205,7 +206,20 @@ UI方針:
   - Apple Intelligence利用不可時はフォールバックせず、オンにする案内を表示する
 - `DocumentAnalysisPipeline`
   - 撮影後解析とプリント詳細からの再解析で共通利用するタスク抽出パイプライン
-  - ページ単位解析、根拠行補正、タスク重複排除、`DocumentRecord` への反映を担当
+  - ページ単位解析、根拠行補正、`DocumentRecord` への反映を担当
+  - 本番経路は `GemmaDocumentAnalyzer` を既定にしているため、Gemma解析ではページ間の重複排除を行わない
+- `GemmaDocumentAnalyzer`
+  - `LiteRT-LM + Gemma 4 E4B` による本番タスク抽出経路
+  - 既存のVision OCR結果と observation ID を単一プロンプトへ渡し、JSON出力を `TaskDraft` に正規化する
+  - 解析はページ単位で行い、対象ページ末尾が明らかに継続している場合だけ次ページ冒頭を `CONTEXT` として渡す
+  - モデル未ダウンロード時は低精度fallbackを使わず `modelNotReady` として解析失敗にする
+  - LiteRT初期化/生成失敗時は `modelLoadFailed` として解析失敗にする
+  - JSON不正、空タスク、存在しない observation ID は `malformedModelOutput` として解析失敗にする
+- `GemmaModelStore`
+  - Hugging Face の `gemma-4-E4B-it.litertlm` を Application Support 配下へユーザー操作でダウンロードする
+  - モデルはアプリに同梱しない
+  - ダウンロード後に SHA256 `0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0` を検証する
+  - 設定画面からダウンロード、削除、再ダウンロードができる
 - `FoundationModelsOCRTextCorrector`
   - `FoundationModels` framework が利用できる場合、タスク化された根拠行だけをオンデバイス補正
   - 根拠行の前後行、ページ境界では隣接ページの近接行も文脈として渡す
@@ -248,6 +262,7 @@ UI方針:
 - 日付/期間パース
 - Foundation Models利用不可時に解析失敗になること
 - Apple Intelligence自由応答サービスの空入力と利用不可時エラー
+- Gemma JSON正規化、不正出力拒否、ページ単位解析、条件付きCONTEXT付与
 - タスク完了状態とライフサイクル
 - Document状態表示
 - 四隅補正座標の保存
@@ -256,6 +271,8 @@ UI方針:
 
 CIを通すために以下を修正済み:
 
+- GitHub Actions workflow をすべて `workflow_dispatch` の手動実行のみに変更し、`push` / `pull_request` / `workflow_run` の自動起動を削除。
+- 実機クラッシュログ `Pribye-2026-06-26-224308.ips` で、SwiftUI の `sheet` 表示開始時に `EnvironmentValues.subscript.getter` assertion で落ちる問題を確認。`RouterPath` / `AnalysisNotificationStore` の type-based environment 参照を optional に変更し、sheet 内 `NavigationStack` へ custom environment を明示注入して、環境値欠落経路でもクラッシュしないよう修正。
 - GitHub Actions の Simulator destination 選択を安定化。
 - Swift 6 で `AnalysisFailureReason` の `Error` 適合を定義元へ移動。
 - SwiftUI の `sheet` modifier 名衝突を修正。
@@ -308,7 +325,7 @@ automation:
 
 ### Foundation Models
 
-`FoundationModelsDocumentAnalyzer` は条件付きで実API接続済みです。
+`FoundationModelsDocumentAnalyzer` は条件付きで実API接続済みですが、現在の本番解析既定経路は `GemmaDocumentAnalyzer` です。
 
 実装:
 
@@ -385,16 +402,17 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 
 優先度順:
 
-1. ユーザー承認後にpushし、`.github/workflows/ios.yml` の iOS CI と自動TestFlight Uploadが成功するか確認する。pushするとmacOS Actions無料枠を消費する。
-2. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析、解析完了通知の前面バナー/背景通知/通知タップ遷移を確認する。
-3. `AI実験` タブでプロンプトとOCR文章を入力し、Apple Intelligenceの自由応答を実機確認する。
-4. 開発中設定の要約プロンプト欄と `AI実験` タブで、短い段階プロンプト方式の抽出精度を実機調整する。
-5. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
-6. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
-7. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
-8. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
-9. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
-10. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
+1. GitHub Actions の `iOS` workflow を手動実行し、CI が成功するか確認する。macOS Actions無料枠を消費する。
+2. 必要時に GitHub Actions の `TestFlight Upload` workflow を手動実行し、アップロードが成功するか確認する。macOS Actions無料枠を消費する。
+3. TestFlightでVisionKit複数ページ書類スキャン、実機カメラ撮影、写真選択、カメラ/写真選択時の四隅補正、ページごとの画像保存、画像ハッシュ、根拠ハイライト、解析開始後のプリント一覧遷移、再解析、解析完了通知の前面バナー/背景通知/通知タップ遷移を確認する。
+4. `AI実験` タブでプロンプトとOCR文章を入力し、Apple Intelligenceの自由応答を実機確認する。
+5. 開発中設定の要約プロンプト欄と `AI実験` タブで、短い段階プロンプト方式の抽出精度を実機調整する。
+6. プリント削除で「プリントだけ削除」と「プリントと保存画像を削除」の両方を実機確認する。
+7. `docs/FOUNDATION_MODELS_SETUP.md` に沿って、Foundation Modelsのタスク抽出とOCR補正をXcode 26 / 対応実機で検証する。
+8. `docs/APPLE_PLATFORM_FEATURE_AUDIT.md` に沿って、次に採用するApple標準機能を判断する。
+9. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
+10. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
+11. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
 
 ## 次チャットでの推奨依頼
 
@@ -407,7 +425,7 @@ TestFlight upload 用のGitHub Actions secretsは登録済みです。
 
 ## 注意
 
-- `main` にpushするとGitHub Actionsが走り、iOS CI成功後にTestFlight Uploadも自動実行される。無料枠節約のため、pushはユーザー確認後に行う。
+- GitHub Actions workflow はすべて手動実行のみ。push だけでは CI / TestFlight upload は始まらない。
 - private repo の macOS Actions は無料枠を消費する。
 - ローカルcommitだけならActionsは走らない。
 - Macがない前提では、TestFlight upload はGitHub Actionsで行う想定。

@@ -310,6 +310,14 @@ struct DocumentDetailView: View {
       document.status = .failed
       document.failureReason = .unsupportedDevice
       await deliverAnalysisCompletion(outcome: .failure)
+    } catch DocumentAnalyzerError.modelNotReady {
+      document.status = .failed
+      document.failureReason = .modelNotReady
+      await deliverAnalysisCompletion(outcome: .failure)
+    } catch DocumentAnalyzerError.modelLoadFailed {
+      document.status = .failed
+      document.failureReason = .modelLoadFailed
+      await deliverAnalysisCompletion(outcome: .failure)
     } catch DocumentAnalyzerError.malformedModelOutput {
       document.status = .failed
       document.failureReason = .extractionError

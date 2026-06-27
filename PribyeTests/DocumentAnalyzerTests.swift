@@ -151,6 +151,299 @@ final class DocumentAnalyzerTests: XCTestCase {
       XCTAssertEqual(error as? DocumentAnalyzerError, .unsupportedDevice)
     }
   }
+
+  func testGemmaAnalyzerFailsWhenModelIsNotReady() async {
+    let modelStore = GemmaModelStore(
+      applicationSupportURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    )
+    let analyzer = GemmaDocumentAnalyzer(modelStore: modelStore)
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "体育授業のお知らせ\n6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: UUID(), text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+
+    do {
+      _ = try await analyzer.analyze(pages: pages)
+      XCTFail("Expected modelNotReady")
+    } catch {
+      XCTAssertEqual(error as? DocumentAnalyzerError, .modelNotReady)
+    }
+  }
+
+  func testGemmaAnalysisResultParsesJSONOutput() throws {
+    let observationID = UUID()
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: observationID, text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参してください",
+          "note": "6月20日までに体操服を持参する",
+          "date": null,
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(observationID.uuidString)"
+        }
+      ]
+    }
+    """
+
+    let result = try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)
+
+    XCTAssertEqual(result.documentTitle, "体育授業のお知らせ")
+    XCTAssertEqual(result.tasks.count, 1)
+    XCTAssertEqual(result.tasks.first?.title, "体操服を持参")
+    XCTAssertEqual(result.tasks.first?.evidenceObservationID, observationID)
+  }
+
+  func testGemmaAnalysisResultRejectsUnknownObservationID() {
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: UUID(), text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参",
+          "note": "6月20日までに体操服を持参する",
+          "date": null,
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(UUID().uuidString)"
+        }
+      ]
+    }
+    """
+
+    XCTAssertThrowsError(try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)) { error in
+      XCTAssertEqual(error as? DocumentAnalyzerError, .malformedModelOutput)
+    }
+  }
+
+  func testGemmaAnalysisResultRejectsEmptyTasks() {
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "体育授業のお知らせ",
+        observations: [
+          OCRObservationSnapshot(id: UUID(), text: "体育授業のお知らせ")
+        ]
+      )
+    ]
+    let response = #"{"documentTitle":"体育授業のお知らせ","tasks":[]}"#
+
+    XCTAssertThrowsError(try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)) { error in
+      XCTAssertEqual(error as? DocumentAnalyzerError, .malformedModelOutput)
+    }
+  }
+
+  func testGemmaAnalysisResultRejectsMalformedJSON() {
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "体育授業のお知らせ",
+        observations: [
+          OCRObservationSnapshot(id: UUID(), text: "体育授業のお知らせ")
+        ]
+      )
+    ]
+
+    XCTAssertThrowsError(try GemmaDocumentAnalyzer.analysisResult(from: "not json", pages: pages)) { error in
+      XCTAssertEqual(error as? DocumentAnalyzerError, .malformedModelOutput)
+    }
+  }
+
+  @MainActor
+  func testPipelineAnalyzesEachPageSeparatelyAndKeepsPerPageTasks() async throws {
+    let sharedObservationID = UUID()
+    let recorder = RecordingAnalyzerRecorder(resultsByPageIndex: [
+      0: AnalysisResult(
+        documentTitle: "1ページ目タイトル",
+        tasks: [
+          TaskDraft(
+            title: "持ち物",
+            note: "雑巾を持参する",
+            dueStart: nil,
+            dueEnd: nil,
+            evidenceText: "雑巾を持参してください。",
+            evidenceObservationID: sharedObservationID
+          )
+        ]
+      ),
+      1: AnalysisResult(
+        documentTitle: "2ページ目タイトル",
+        tasks: [
+          TaskDraft(
+            title: "持ち物",
+            note: "上履きを持参する",
+            dueStart: nil,
+            dueEnd: nil,
+            evidenceText: "上履きを持参してください。",
+            evidenceObservationID: sharedObservationID
+          )
+        ]
+      )
+    ])
+    let analyzer = RecordingDocumentAnalyzer(shouldDeduplicateTasks: false, recorder: recorder)
+    let pipeline = DocumentAnalysisPipeline(analyzer: analyzer)
+    let document = DocumentRecord()
+    let snapshots = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "雑巾を持参する、",
+        observations: [
+          OCRObservationSnapshot(id: sharedObservationID, text: "雑巾を持参してください。")
+        ]
+      ),
+      OCRPageSnapshot(
+        pageIndex: 1,
+        text: "上履きを持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: sharedObservationID, text: "上履きを持参してください。")
+        ]
+      )
+    ]
+
+    try await pipeline.applyAnalysis(to: document, snapshots: snapshots)
+
+    let recordedCalls = await recorder.recordedCalls()
+    XCTAssertEqual(recordedCalls.count, 2)
+    XCTAssertEqual(recordedCalls[0].map(\.pageIndex), [0, 1])
+    XCTAssertEqual(recordedCalls[1].map(\.pageIndex), [1])
+    XCTAssertEqual(document.title, "1ページ目タイトル")
+    XCTAssertEqual(document.tasks.map(\.note), ["雑巾を持参する", "上履きを持参する"])
+  }
+
+  @MainActor
+  func testPipelineAddsContextOnlyWhenTargetPageLooksIncomplete() async throws {
+    let recorder = RecordingAnalyzerRecorder(resultsByPageIndex: [
+      0: AnalysisResult(documentTitle: "1", tasks: [
+        TaskDraft(
+          title: "持参",
+          note: "雑巾を持参する",
+          dueStart: nil,
+          dueEnd: nil,
+          evidenceText: "雑巾を持参してください。",
+          evidenceObservationID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")
+        )
+      ]),
+      1: AnalysisResult(documentTitle: "2", tasks: [
+        TaskDraft(
+          title: "提出",
+          note: "申込書を提出する",
+          dueStart: nil,
+          dueEnd: nil,
+          evidenceText: "申込書を提出してください。",
+          evidenceObservationID: UUID(uuidString: "22222222-2222-2222-2222-222222222222")
+        )
+      ])
+    ])
+    let analyzer = RecordingDocumentAnalyzer(shouldDeduplicateTasks: false, recorder: recorder)
+    let pipeline = DocumentAnalysisPipeline(analyzer: analyzer)
+    let document = DocumentRecord()
+    let firstObservationID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+    let secondObservationID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+    let snapshots = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "持ち物は次のとおり、",
+        observations: [
+          OCRObservationSnapshot(id: firstObservationID, text: "雑巾を持参してください。")
+        ]
+      ),
+      OCRPageSnapshot(
+        pageIndex: 1,
+        text: "申込書を提出してください。",
+        observations: [
+          OCRObservationSnapshot(id: secondObservationID, text: "申込書を提出してください。")
+        ]
+      )
+    ]
+
+    try await pipeline.applyAnalysis(to: document, snapshots: snapshots)
+
+    let recordedCalls = await recorder.recordedCalls()
+    XCTAssertEqual(recordedCalls[0].count, 2)
+    XCTAssertEqual(recordedCalls[1].count, 1)
+  }
+
+  @MainActor
+  func testPipelineDropsTasksBackedOnlyByContextObservation() async throws {
+    let targetObservationID = UUID()
+    let contextObservationID = UUID()
+    let recorder = RecordingAnalyzerRecorder(resultsByPageIndex: [
+      0: AnalysisResult(
+        documentTitle: "おたより",
+        tasks: [
+          TaskDraft(
+            title: "提出",
+            note: "申込書を提出する",
+            dueStart: nil,
+            dueEnd: nil,
+            evidenceText: "申込書を提出してください。",
+            evidenceObservationID: contextObservationID
+          )
+        ]
+      ),
+      1: AnalysisResult(
+        documentTitle: "おたより",
+        tasks: [
+          TaskDraft(
+            title: "持参",
+            note: "申込書を提出する",
+            dueStart: nil,
+            dueEnd: nil,
+            evidenceText: "申込書を提出してください。",
+            evidenceObservationID: contextObservationID
+          )
+        ]
+      )
+    ])
+    let analyzer = RecordingDocumentAnalyzer(shouldDeduplicateTasks: false, recorder: recorder)
+    let pipeline = DocumentAnalysisPipeline(analyzer: analyzer)
+    let document = DocumentRecord()
+    let snapshots = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "提出物は次頁、",
+        observations: [
+          OCRObservationSnapshot(id: targetObservationID, text: "提出物は次頁、")
+        ]
+      ),
+      OCRPageSnapshot(
+        pageIndex: 1,
+        text: "申込書を提出してください。",
+        observations: [
+          OCRObservationSnapshot(id: contextObservationID, text: "申込書を提出してください。")
+        ]
+      )
+    ]
+
+    try await pipeline.applyAnalysis(to: document, snapshots: snapshots)
+
+    XCTAssertEqual(document.tasks.count, 1)
+    XCTAssertEqual(document.tasks.first?.evidenceObservationID, contextObservationID)
+    XCTAssertEqual(document.tasks.first?.note, "申込書を提出する")
+  }
 }
 
 private struct StubDocumentAnalyzer: DocumentAnalyzer {
@@ -158,5 +451,35 @@ private struct StubDocumentAnalyzer: DocumentAnalyzer {
 
   func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
     result
+  }
+}
+
+private actor RecordingAnalyzerRecorder {
+  private let resultsByPageIndex: [Int: AnalysisResult]
+  private var calls: [[OCRPageSnapshot]] = []
+
+  init(resultsByPageIndex: [Int: AnalysisResult]) {
+    self.resultsByPageIndex = resultsByPageIndex
+  }
+
+  func analyze(pages: [OCRPageSnapshot]) throws -> AnalysisResult {
+    calls.append(pages)
+    guard let result = resultsByPageIndex[pages[0].pageIndex] else {
+      throw DocumentAnalyzerError.noActionableTasks
+    }
+    return result
+  }
+
+  func recordedCalls() -> [[OCRPageSnapshot]] {
+    calls
+  }
+}
+
+private struct RecordingDocumentAnalyzer: DocumentAnalyzer {
+  var shouldDeduplicateTasks: Bool
+  let recorder: RecordingAnalyzerRecorder
+
+  func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
+    try await recorder.analyze(pages: pages)
   }
 }

@@ -17,6 +17,9 @@ packages:
   GoogleMobileAds:
     url: https://github.com/googleads/swift-package-manager-google-mobile-ads.git
     from: "13.5.0"
+  LiteRTLM:
+    url: https://github.com/google-ai-edge/LiteRT-LM
+    from: "0.13.1"
 targets:
   Pribye:
     type: application
@@ -35,6 +38,8 @@ targets:
     dependencies:
       - package: GoogleMobileAds
         product: GoogleMobileAds
+      - package: LiteRTLM
+        product: LiteRTLM
     scheme:
       testTargets:
         - PribyeTests

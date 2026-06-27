@@ -35,6 +35,9 @@ struct CaptureFlowView: View {
   @State private var selectedPageIndex = 0
   @State private var isShowingDocumentScanner = false
   @State private var isShowingCamera = false
+  @State private var gemmaModelStatus: GemmaModelStatus = .notDownloaded
+  @State private var isDownloadingGemmaModel = false
+  @State private var gemmaModelMessage: String?
 
   private let ocrService: OCRServiceProtocol = VisionOCRService()
   private let analysisPipeline = DocumentAnalysisPipeline()
@@ -62,6 +65,9 @@ struct CaptureFlowView: View {
     .onChange(of: selectedItem) { _, newValue in
       Task { await load(item: newValue) }
     }
+    .task {
+      refreshGemmaModelStatus()
+    }
     .fullScreenCover(isPresented: $isShowingDocumentScanner) {
       DocumentScannerView { images in
         useScannedImages(images)
@@ -88,11 +94,7 @@ struct CaptureFlowView: View {
 
   @ViewBuilder
   private var inputView: some View {
-    if AppleIntelligenceAvailability().isSupported {
-      inputActionsView
-    } else {
-      AppleIntelligenceUnavailableView()
-    }
+    inputActionsView
   }
 
   private var inputActionsView: some View {
@@ -103,6 +105,8 @@ struct CaptureFlowView: View {
 
       Text("プリントを取り込む")
         .font(.title2.weight(.bold))
+
+      modelPreparationView
 
       Button {
         if VNDocumentCameraViewController.isSupported {
@@ -117,12 +121,14 @@ struct CaptureFlowView: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
+      .disabled(gemmaModelStatus != .ready)
 
       PhotosPicker(selection: $selectedItem, matching: .images) {
         Label("写真から選ぶ", systemImage: "photo.on.rectangle")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
+      .disabled(gemmaModelStatus != .ready)
 
       Text("写真・OCR・AI結果は外部AI APIへ送信しません。写真から選んだ画像は写真ライブラリへ再保存しません。")
         .font(.footnote)
@@ -165,6 +171,39 @@ struct CaptureFlowView: View {
       .buttonStyle(.borderedProminent)
     }
     .padding()
+  }
+
+  @ViewBuilder
+  private var modelPreparationView: some View {
+    if gemmaModelStatus != .ready {
+      VStack(spacing: 10) {
+        Label("AIモデルをダウンロードしてください", systemImage: "icloud.and.arrow.down")
+          .font(.headline)
+        Text("解析にはGemma 4 E4Bのローカルモデルが必要です。")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+        if isDownloadingGemmaModel {
+          ProgressView()
+        } else {
+          Button {
+            Task { await downloadGemmaModel() }
+          } label: {
+            Label(gemmaModelStatus == .invalid ? "再ダウンロード" : "モデルをダウンロード", systemImage: "arrow.down.circle")
+          }
+          .buttonStyle(.bordered)
+        }
+        if let gemmaModelMessage {
+          Text(gemmaModelMessage)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
+      }
+      .padding()
+      .background(.secondary.opacity(0.08))
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
   }
 
   private func failureView(message: String) -> some View {
@@ -217,6 +256,25 @@ struct CaptureFlowView: View {
     }
     selectedItem = nil
     beginAnalysisAndDismiss(pages)
+  }
+
+  private func refreshGemmaModelStatus() {
+    gemmaModelStatus = GemmaModelStore.shared.status()
+  }
+
+  @MainActor
+  private func downloadGemmaModel() async {
+    isDownloadingGemmaModel = true
+    gemmaModelMessage = "約3.66GBのモデルをダウンロードします。"
+    do {
+      try await GemmaModelStore.shared.downloadModel()
+      refreshGemmaModelStatus()
+      gemmaModelMessage = "モデルの準備が完了しました。"
+    } catch {
+      refreshGemmaModelStatus()
+      gemmaModelMessage = "モデルのダウンロードまたは検証に失敗しました。"
+    }
+    isDownloadingGemmaModel = false
   }
 
   @MainActor
@@ -345,6 +403,14 @@ struct CaptureFlowView: View {
     } catch DocumentAnalyzerError.unsupportedDevice {
       document.status = .failed
       document.failureReason = .unsupportedDevice
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
+    } catch DocumentAnalyzerError.modelNotReady {
+      document.status = .failed
+      document.failureReason = .modelNotReady
+      await deliverAnalysisCompletion(for: document, outcome: .failure)
+    } catch DocumentAnalyzerError.modelLoadFailed {
+      document.status = .failed
+      document.failureReason = .modelLoadFailed
       await deliverAnalysisCompletion(for: document, outcome: .failure)
     } catch DocumentAnalyzerError.malformedModelOutput {
       document.status = .failed

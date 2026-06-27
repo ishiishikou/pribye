@@ -6,25 +6,24 @@ struct AppView: View {
   @State private var selectedTab: AppTab = .tasks
   @State private var tabRouter = TabRouter()
   @State private var analysisNotifications = AnalysisNotificationStore()
-  @State private var showsUnsupportedAIAlert = false
 
   var body: some View {
     ZStack(alignment: .top) {
       TabView(selection: $selectedTab) {
         ForEach(AppTab.allCases) { tab in
           let router = tabRouter.router(for: tab)
-          NavigationStack(path: tabRouter.binding(for: tab)) {
-            tab.makeContentView()
-              .withAppRoutes()
-          }
-          .environment(router)
-          .environment(analysisNotifications)
-          .withSheetDestinations(sheet: Binding(
-            get: { router.presentedSheet },
-            set: { router.presentedSheet = $0 }
-          ), router: router, analysisNotifications: analysisNotifications, onAnalysisStarted: {
-            selectedTab = .prints
-          })
+        NavigationStack(path: tabRouter.binding(for: tab)) {
+          tab.makeContentView()
+            .withAppRoutes()
+        }
+        .environment(router)
+        .environment(analysisNotifications)
+        .withSheetDestinations(sheet: Binding(
+          get: { router.presentedSheet },
+          set: { router.presentedSheet = $0 }
+        ), router: router, analysisNotifications: analysisNotifications, onAnalysisStarted: {
+          selectedTab = .prints
+        })
           .tabItem { tab.label }
           .tag(tab)
         }
@@ -45,7 +44,6 @@ struct AppView: View {
     }
     .task {
       analysisNotifications.updateScenePhase(scenePhase)
-      showsUnsupportedAIAlert = !AppleIntelligenceAvailability().isSupported
       routePendingNotificationTaps()
     }
     .onChange(of: scenePhase) { _, newValue in
@@ -53,11 +51,6 @@ struct AppView: View {
     }
     .onReceive(NotificationCenter.default.publisher(for: .analysisNotificationTapped)) { _ in
       routePendingNotificationTaps()
-    }
-    .alert("Apple Intelligenceが必要です", isPresented: $showsUnsupportedAIAlert) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("プリバイの解析にはApple Intelligenceが必要です。対応端末では設定でApple Intelligenceをオンにしてから利用してください。")
     }
   }
 

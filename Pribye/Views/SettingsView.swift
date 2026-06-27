@@ -7,6 +7,9 @@ struct SettingsView: View {
   @AppStorage("adsRemoved") private var adsRemoved = false
   @AppStorage("developmentSummaryPrompt") private var developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
   @StateObject private var purchaseService = PurchaseService()
+  @State private var gemmaModelStatus: GemmaModelStatus = .notDownloaded
+  @State private var isDownloadingGemmaModel = false
+  @State private var gemmaModelMessage: String?
 
   private var csvText: String {
     CSVExporter().export(documents: documents)
@@ -57,6 +60,43 @@ struct SettingsView: View {
         }
       }
 
+      Section("AIモデル") {
+        Label(gemmaModelStatusText, systemImage: gemmaModelStatusIcon)
+          .foregroundStyle(gemmaModelStatusColor)
+
+        Text("解析にはGemma 4 E4Bのローカルモデルを使います。モデルはアプリに含めず、初回利用前にダウンロードします。")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+
+        if isDownloadingGemmaModel {
+          HStack {
+            ProgressView()
+            Text("ダウンロード中")
+          }
+        } else {
+          Button {
+            Task { await downloadGemmaModel() }
+          } label: {
+            Label(gemmaModelStatus == .invalid ? "再ダウンロード" : "モデルをダウンロード", systemImage: "arrow.down.circle")
+          }
+          .disabled(gemmaModelStatus == .ready)
+
+          if gemmaModelStatus != .notDownloaded {
+            Button(role: .destructive) {
+              deleteGemmaModel()
+            } label: {
+              Label("モデルを削除", systemImage: "trash")
+            }
+          }
+        }
+
+        if let gemmaModelMessage {
+          Text(gemmaModelMessage)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+
       Section("開発中") {
         Text("要約プロンプト")
           .font(.headline)
@@ -91,6 +131,7 @@ struct SettingsView: View {
     }
     .navigationTitle("設定")
     .task {
+      refreshGemmaModelStatus()
       if developmentSummaryPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
       }
@@ -107,5 +148,67 @@ struct SettingsView: View {
       return "広告を非表示にする（\(product.displayPrice)）"
     }
     return "広告を非表示にする"
+  }
+
+  private var gemmaModelStatusText: String {
+    switch gemmaModelStatus {
+    case .notDownloaded:
+      return "AIモデル未ダウンロード"
+    case .ready:
+      return "AIモデル準備完了"
+    case .invalid:
+      return "AIモデル検証失敗"
+    }
+  }
+
+  private var gemmaModelStatusIcon: String {
+    switch gemmaModelStatus {
+    case .notDownloaded:
+      return "icloud.and.arrow.down"
+    case .ready:
+      return "checkmark.circle.fill"
+    case .invalid:
+      return "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var gemmaModelStatusColor: Color {
+    switch gemmaModelStatus {
+    case .notDownloaded:
+      return .secondary
+    case .ready:
+      return .green
+    case .invalid:
+      return .orange
+    }
+  }
+
+  private func refreshGemmaModelStatus() {
+    gemmaModelStatus = GemmaModelStore.shared.status()
+  }
+
+  @MainActor
+  private func downloadGemmaModel() async {
+    isDownloadingGemmaModel = true
+    gemmaModelMessage = "約3.66GBのモデルをダウンロードします。完了後にハッシュ検証します。"
+    do {
+      try await GemmaModelStore.shared.downloadModel()
+      refreshGemmaModelStatus()
+      gemmaModelMessage = "モデルの準備が完了しました。"
+    } catch {
+      refreshGemmaModelStatus()
+      gemmaModelMessage = "モデルのダウンロードまたは検証に失敗しました。"
+    }
+    isDownloadingGemmaModel = false
+  }
+
+  private func deleteGemmaModel() {
+    do {
+      try GemmaModelStore.shared.deleteModel()
+      refreshGemmaModelStatus()
+      gemmaModelMessage = "モデルを削除しました。"
+    } catch {
+      gemmaModelMessage = "モデルを削除できませんでした。"
+    }
   }
 }
