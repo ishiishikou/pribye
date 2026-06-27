@@ -26,7 +26,7 @@ enum CapturedPageSource {
 struct CaptureFlowView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
-  @Environment(AnalysisNotificationStore.self) private var analysisNotifications
+  @Environment(AnalysisNotificationStore.self) private var analysisNotifications: AnalysisNotificationStore?
   var onAnalysisStarted: () -> Void = {}
 
   @State private var step: CaptureStep = .input
@@ -278,7 +278,7 @@ struct CaptureFlowView: View {
     onAnalysisStarted()
 
     Task { @MainActor in
-      await analysisNotifications.requestAuthorizationIfNeeded()
+      await analysisNotifications?.requestAuthorizationIfNeeded()
       await analyzeCapturedPages(pages, into: document)
     }
   }
@@ -374,6 +374,9 @@ struct CaptureFlowView: View {
     for document: DocumentRecord,
     outcome: AnalysisNotificationOutcome
   ) async {
+    guard let analysisNotifications else {
+      return
+    }
     await analysisNotifications.deliver(
       AnalysisCompletionNotification(documentID: document.id, outcome: outcome)
     )

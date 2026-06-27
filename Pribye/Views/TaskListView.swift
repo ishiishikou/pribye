@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct TaskListView: View {
-  @Environment(RouterPath.self) private var router
+  @Environment(RouterPath.self) private var router: RouterPath?
   @Query(sort: \ExtractedTaskRecord.createdAt, order: .reverse) private var tasks: [ExtractedTaskRecord]
   @State private var showingCompleted = false
 
@@ -22,7 +22,7 @@ struct TaskListView: View {
           systemImage: "checklist",
           actionTitle: "プリントを撮影"
         ) {
-          router.presentedSheet = .capture
+          router?.presentedSheet = .capture
         }
       } else {
         List {
@@ -38,7 +38,7 @@ struct TaskListView: View {
           Section {
             ForEach(visibleTasks) { task in
               Button {
-                router.navigate(to: .task(task.id))
+                router?.navigate(to: .task(task.id))
               } label: {
                 TaskRowView(task: task)
               }
@@ -62,7 +62,7 @@ struct TaskListView: View {
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button {
-          router.presentedSheet = .capture
+          router?.presentedSheet = .capture
         } label: {
           Image(systemName: "plus")
         }

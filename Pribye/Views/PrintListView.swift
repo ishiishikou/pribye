@@ -3,7 +3,7 @@ import SwiftUI
 
 struct PrintListView: View {
   @Environment(\.modelContext) private var modelContext
-  @Environment(RouterPath.self) private var router
+  @Environment(RouterPath.self) private var router: RouterPath?
   @Query(sort: \DocumentRecord.capturedAt, order: .reverse) private var documents: [DocumentRecord]
   @State private var documentPendingDeletion: DocumentRecord?
   @State private var deleteErrorMessage: String?
@@ -18,14 +18,14 @@ struct PrintListView: View {
           systemImage: "doc.text.image",
           actionTitle: "プリントを撮影"
         ) {
-          router.presentedSheet = .capture
+          router?.presentedSheet = .capture
         }
       } else {
         List {
           Section {
             ForEach(documents) { document in
               Button {
-                router.navigate(to: .document(document.id))
+                router?.navigate(to: .document(document.id))
               } label: {
                 DocumentRowView(document: document)
               }
@@ -48,7 +48,7 @@ struct PrintListView: View {
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button {
-          router.presentedSheet = .capture
+          router?.presentedSheet = .capture
         } label: {
           Image(systemName: "camera")
         }

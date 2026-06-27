@@ -135,8 +135,8 @@ struct DocumentDetailLookupView: View {
 struct DocumentDetailView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.modelContext) private var modelContext
-  @Environment(RouterPath.self) private var router
-  @Environment(AnalysisNotificationStore.self) private var analysisNotifications
+  @Environment(RouterPath.self) private var router: RouterPath?
+  @Environment(AnalysisNotificationStore.self) private var analysisNotifications: AnalysisNotificationStore?
   @Bindable var document: DocumentRecord
   @State private var isReanalyzing = false
   @State private var isShowingDeleteConfirmation = false
@@ -169,12 +169,12 @@ struct DocumentDetailView: View {
           Text("タスクはありません")
             .foregroundStyle(.secondary)
           Button("手動でタスクを追加") {
-            router.presentedSheet = .manualTask(documentID: document.id)
+            router?.presentedSheet = .manualTask(documentID: document.id)
           }
         } else {
           ForEach(document.tasks) { task in
             Button {
-              router.navigate(to: .task(task.id))
+              router?.navigate(to: .task(task.id))
             } label: {
               TaskRowView(task: task)
             }
@@ -235,7 +235,7 @@ struct DocumentDetailView: View {
           }
           .disabled(isReanalyzing)
           Button("手動で登録する") {
-            router.presentedSheet = .manualTask(documentID: document.id)
+            router?.presentedSheet = .manualTask(documentID: document.id)
           }
         }
       }
@@ -288,7 +288,7 @@ struct DocumentDetailView: View {
 
     isReanalyzing = true
     defer { isReanalyzing = false }
-    await analysisNotifications.requestAuthorizationIfNeeded()
+    await analysisNotifications?.requestAuthorizationIfNeeded()
 
     let oldTasks = document.tasks
     document.tasks.removeAll()
@@ -323,6 +323,9 @@ struct DocumentDetailView: View {
 
   @MainActor
   private func deliverAnalysisCompletion(outcome: AnalysisNotificationOutcome) async {
+    guard let analysisNotifications else {
+      return
+    }
     await analysisNotifications.deliver(
       AnalysisCompletionNotification(documentID: document.id, outcome: outcome)
     )

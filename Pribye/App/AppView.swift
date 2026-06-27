@@ -22,7 +22,7 @@ struct AppView: View {
           .withSheetDestinations(sheet: Binding(
             get: { router.presentedSheet },
             set: { router.presentedSheet = $0 }
-          ), onAnalysisStarted: {
+          ), router: router, analysisNotifications: analysisNotifications, onAnalysisStarted: {
             selectedTab = .prints
           })
           .tabItem { tab.label }
@@ -121,6 +121,8 @@ extension View {
 
   func withSheetDestinations(
     sheet destination: Binding<SheetDestination?>,
+    router: RouterPath,
+    analysisNotifications: AnalysisNotificationStore,
     onAnalysisStarted: @escaping () -> Void
   ) -> some View {
     self.sheet(item: destination) { destination in
@@ -132,6 +134,8 @@ extension View {
           ManualTaskView(documentID: documentID)
         }
       }
+      .environment(router)
+      .environment(analysisNotifications)
     }
   }
 }
