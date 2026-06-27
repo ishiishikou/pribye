@@ -1,10 +1,6 @@
 name: TestFlight Upload
 
 on:
-  workflow_run:
-    workflows: ["iOS"]
-    types: [completed]
-    branches: ["main"]
   workflow_dispatch:
     inputs:
       build_number:
@@ -14,15 +10,6 @@ on:
 
 jobs:
   upload:
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_branch == 'main' &&
-          github.event.workflow_run.event == 'push'
-        )
-      }}
     runs-on: macos-15
     env:
       APP_BUNDLE_ID: com.pribye.app

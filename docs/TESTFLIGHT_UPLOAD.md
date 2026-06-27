@@ -13,9 +13,8 @@
 
 - `.p12`、private key、provisioning profile、App Store Connect API key はリポジトリに commit しない。
 - GitHub Actions secrets に登録する値は、チャットや issue に貼らない。
-- TestFlight workflow は手動実行できる。
-- `main` への push で `.github/workflows/ios.yml` が成功した場合、TestFlight workflow も自動実行される。
-- 自動実行は macOS runner を追加で消費するため、不要な小刻み push は避ける。
+- `iOS` workflow と `TestFlight Upload` workflow はどちらも手動実行のみ。
+- push だけでは GitHub Actions は起動しない。
 
 ## GitHub Actions secrets
 
@@ -123,14 +122,6 @@ GitHub repository で Settings > Secrets and variables > Actions > Repository se
 - `*.base64.txt`
 
 ## 5. TestFlight upload workflow を実行する
-
-### 自動実行
-
-1. `main` に push する。
-2. `iOS` workflow が成功すると、`TestFlight Upload` workflow が自動で起動する。
-3. 成功後、App Store Connect > TestFlight に build が表示されるまで待つ。
-
-### 手動実行
 
 1. `.github/workflows/testflight.yml` が GitHub 上の対象ブランチに存在することを確認する。
 2. GitHub repository の Actions を開く。
