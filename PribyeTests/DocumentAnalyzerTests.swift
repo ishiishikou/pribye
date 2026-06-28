@@ -209,6 +209,71 @@ final class DocumentAnalyzerTests: XCTestCase {
     XCTAssertEqual(result.tasks.first?.evidenceObservationID, observationID)
   }
 
+  func testGemmaAnalysisResultUsesModelDateWhenPresent() throws {
+    let observationID = UUID()
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: observationID, text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参",
+          "note": "6月20日までに体操服を持参する",
+          "date": "2026-06-25",
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(observationID.uuidString)"
+        }
+      ]
+    }
+    """
+
+    let result = try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)
+
+    XCTAssertEqual(result.tasks.first?.dueStart, date(year: 2026, month: 6, day: 25))
+    XCTAssertNil(result.tasks.first?.dueEnd)
+  }
+
+  func testGemmaAnalysisResultFallsBackToLocalDateParserWhenModelDateIsMissing() throws {
+    let observationID = UUID()
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: observationID, text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参",
+          "note": "6月20日までに体操服を持参する",
+          "date": null,
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(observationID.uuidString)"
+        }
+      ]
+    }
+    """
+
+    let result = try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)
+
+    XCTAssertEqual(component(.month, result.tasks.first?.dueStart), 6)
+    XCTAssertEqual(component(.day, result.tasks.first?.dueStart), 20)
+    XCTAssertNil(result.tasks.first?.dueEnd)
+  }
+
   func testGemmaAnalysisResultRejectsUnknownObservationID() {
     let pages = [
       OCRPageSnapshot(
@@ -482,4 +547,20 @@ private struct RecordingDocumentAnalyzer: DocumentAnalyzer {
   func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
     try await recorder.analyze(pages: pages)
   }
+}
+
+private func date(year: Int, month: Int, day: Int) -> Date {
+  var components = DateComponents()
+  components.calendar = Calendar(identifier: .gregorian)
+  components.year = year
+  components.month = month
+  components.day = day
+  return components.date!
+}
+
+private func component(_ component: Calendar.Component, _ date: Date?) -> Int? {
+  guard let date else {
+    return nil
+  }
+  return Calendar(identifier: .gregorian).component(component, from: date)
 }

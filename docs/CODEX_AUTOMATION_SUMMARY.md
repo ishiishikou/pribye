@@ -33,6 +33,7 @@
 | 2026-06-25 | GitHub PR は 0 件、最新 Actions は iOS run `27887769614` と TestFlight run `27887824899` が成功済みで、新規 CI 修正タスクはなし。通知機能は前面バナー、初回解析開始時の通知許可要求、背景時のローカル通知要求、成功/失敗のタブ遷移ロジック、通知タップのbufferingまで実装した。 |
 | 2026-06-26 | GitHub PR は 0 件、最新 Actions は iOS run `27887769614` と TestFlight run `27887824899` が成功済みで、新規 CI 修正タスクはなし。通知機能は `AnalysisNotificationStore` の前面/背景分岐を unit test で固定した。 |
 | 2026-06-27 | GitHub PR は 0 件。6月26日の iOS 失敗 run `28207739501`、`28233227662`、`28240730883` は後続 iOS run `28241199526` と TestFlight run `28241501046` の成功で解消済みとして台帳へ記録した。Gemma 4 E4B差し替えは、LiteRT-LM依存、モデルDL/検証、設定/撮影導線、本番Analyzer切替、JSON正規化テストまで実装した。 |
+| 2026-06-29 | GitHub PR は 0 件。最新 Actions は iOS run `28241199526` と TestFlight run `28241501046` が成功済みで、新規 CI 修正タスクはなし。Gemma解析でモデル出力 `date` を優先し、欠落時はローカル日付解析へフォールバックする単体テストを追加した。 |
 
 ## 次回へ残す要点
 
@@ -43,3 +44,4 @@
 | 2026-06-25 | 通知機能の iOS build、前面バナー表示、通知許可ダイアログ、背景ローカル通知、システム通知タップ遷移は TestFlight または Xcode 26 環境で確認が必要。 |
 | 2026-06-26 | Windows環境のため追加した通知unit testは未実行。次回、macOS runner または Xcode 26 環境で `PribyeTests/AnalysisNotificationTests.swift` を含む iOS test を確認する。 |
 | 2026-06-27 | Gemma差し替えは Windows環境では iOS build / SPM resolve / 3.66GBモデルDL / LiteRT実機ロード / 抽出精度を未検証。次回はユーザー承認後のpushまたはTestFlightで確認する。 |
+| 2026-06-29 | Windows環境のため追加した Gemma 日付優先/fallback 単体テストは未実行。次回、macOS runner または Xcode 26 環境で `PribyeTests/DocumentAnalyzerTests.swift` を含む iOS test を確認する。 |

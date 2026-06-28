@@ -286,6 +286,7 @@ CIを通すために以下を修正済み:
 - 実機クラッシュログ `Pribye-2026-06-19-192256.ips` で、補正後画像の写真ライブラリ保存時に `PHPhotoLibrary` の callback が `com.apple.PHPhotoLibrary.changes` queue から呼ばれ、`@MainActor` 隔離された closure が Swift 6 の actor isolation runtime check で `EXC_BREAKPOINT` になる問題を確認。`ImageAssetService` の Photos callback 処理を nonisolated helper に分離して修正。
 - iOS CI run `27857552838` で、`ImageAssetService.loadImageData` の `withCheckedThrowingContinuation` に `return` がなく Swift 6 build error になった問題を確認。`return try await` に修正し、あわせて `createPhotoAsset` の Photos callback で mutable captured var 警告が出ないよう同期 state に分離。
 - iOS CI run `27859101646` で、`CapturedPageImage.cropCorners` の default value が `CropPreview.defaultCorners` を参照し、Swift 6でMainActor隔離値扱いになってbuild errorになる問題を確認。四隅初期値をView型から独立したhelperへ分離して修正。
+- Gemma解析でモデル出力 `date` がある場合はその日付を優先し、`date` 欠落時はローカル `DateRangeParser` へフォールバックする挙動を単体テストで固定。
 
 ## 現在の重要な制約
 
