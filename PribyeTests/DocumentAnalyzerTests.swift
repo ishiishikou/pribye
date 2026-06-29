@@ -209,6 +209,42 @@ final class DocumentAnalyzerTests: XCTestCase {
     XCTAssertEqual(result.tasks.first?.evidenceObservationID, observationID)
   }
 
+  func testGemmaAnalysisResultExtractsJSONFromModelPreamble() throws {
+    let observationID = UUID()
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: observationID, text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    以下のJSONで回答します。
+    ```json
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参",
+          "note": "6月20日までに体操服を持参する",
+          "date": null,
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(observationID.uuidString)"
+        }
+      ]
+    }
+    ```
+    """
+
+    let result = try GemmaDocumentAnalyzer.analysisResult(from: response, pages: pages)
+
+    XCTAssertEqual(result.documentTitle, "体育授業のお知らせ")
+    XCTAssertEqual(result.tasks.first?.title, "体操服を持参")
+    XCTAssertEqual(result.tasks.first?.evidenceObservationID, observationID)
+  }
+
   func testGemmaAnalysisResultUsesModelDateWhenPresent() throws {
     let observationID = UUID()
     let pages = [
