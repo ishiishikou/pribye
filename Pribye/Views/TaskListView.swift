@@ -16,9 +16,9 @@ struct TaskListView: View {
 
   var body: some View {
     Group {
-      if visibleTasks.isEmpty {
+      if tasks.isEmpty {
         EmptyStateView(
-          title: showingCompleted ? "完了したタスクはありません" : "まだタスクはありません",
+          title: "まだタスクはありません",
           systemImage: "checklist",
           actionTitle: "プリントを撮影"
         ) {
@@ -35,19 +35,34 @@ struct TaskListView: View {
             .listRowSeparator(.hidden)
           }
 
-          Section {
-            ForEach(visibleTasks) { task in
-              Button {
-                router?.navigate(to: .task(task.id))
-              } label: {
-                TaskRowView(task: task)
-              }
-              .buttonStyle(.plain)
-              .swipeActions {
-                Button(task.isCompleted ? "未完了" : "完了") {
-                  task.setCompleted(!task.isCompleted)
+          if visibleTasks.isEmpty {
+            Section {
+              ContentUnavailableView(
+                showingCompleted ? "完了したタスクはありません" : "未完了のタスクはありません",
+                systemImage: showingCompleted ? "checkmark.circle" : "checklist",
+                description: Text(
+                  showingCompleted
+                    ? "タスクを完了すると、ここで振り返れます。"
+                    : "完了済みを確認するには、上の表示を切り替えてください。"
+                )
+              )
+              .listRowSeparator(.hidden)
+            }
+          } else {
+            Section {
+              ForEach(visibleTasks) { task in
+                Button {
+                  router?.navigate(to: .task(task.id))
+                } label: {
+                  TaskRowView(task: task)
                 }
-                .tint(task.isCompleted ? .orange : .green)
+                .buttonStyle(.plain)
+                .swipeActions {
+                  Button(task.isCompleted ? "未完了" : "完了") {
+                    task.setCompleted(!task.isCompleted)
+                  }
+                  .tint(task.isCompleted ? .orange : .green)
+                }
               }
             }
           }
