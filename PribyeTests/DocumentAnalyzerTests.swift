@@ -175,6 +175,44 @@ final class DocumentAnalyzerTests: XCTestCase {
     }
   }
 
+  func testGemmaAnalyzerUsesInjectedTextGenerator() async throws {
+    let observationID = UUID()
+    let pages = [
+      OCRPageSnapshot(
+        pageIndex: 0,
+        text: "6月20日までに体操服を持参してください。",
+        observations: [
+          OCRObservationSnapshot(id: observationID, text: "6月20日までに体操服を持参してください。")
+        ]
+      )
+    ]
+    let response = """
+    {
+      "documentTitle": "体育授業のお知らせ",
+      "tasks": [
+        {
+          "title": "体操服を持参",
+          "note": "6月20日までに体操服を持参する",
+          "date": null,
+          "evidenceText": "6月20日までに体操服を持参してください。",
+          "evidenceObservationID": "\(observationID.uuidString)"
+        }
+      ]
+    }
+    """
+    let generator = StubGemmaTextGenerator(response: response)
+    let analyzer = GemmaDocumentAnalyzer(textGenerator: generator)
+
+    let result = try await analyzer.analyze(pages: pages)
+    let prompt = await generator.recordedPrompt()
+
+    XCTAssertTrue(prompt?.contains("TARGET_PAGE pageIndex=0") ?? false)
+    XCTAssertTrue(prompt?.contains(observationID.uuidString) ?? false)
+    XCTAssertEqual(result.documentTitle, "体育授業のお知らせ")
+    XCTAssertEqual(result.tasks.first?.title, "体操服を持参")
+    XCTAssertEqual(result.tasks.first?.evidenceObservationID, observationID)
+  }
+
   func testGemmaAnalysisResultParsesJSONOutput() throws {
     let observationID = UUID()
     let pages = [
@@ -552,6 +590,24 @@ private struct StubDocumentAnalyzer: DocumentAnalyzer {
 
   func analyze(pages: [OCRPageSnapshot]) async throws -> AnalysisResult {
     result
+  }
+}
+
+private actor StubGemmaTextGenerator: GemmaTextGenerating {
+  private let response: String
+  private var prompt: String?
+
+  init(response: String) {
+    self.response = response
+  }
+
+  func generate(prompt: String) async throws -> String {
+    self.prompt = prompt
+    return response
+  }
+
+  func recordedPrompt() -> String? {
+    prompt
   }
 }
 
