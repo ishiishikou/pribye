@@ -120,6 +120,12 @@ struct DocumentRowView: View {
         Text("\(document.capturedAt.formatted(.dateTime.year().month().day())) ・ \(document.tasks.count)件")
           .font(.caption)
           .foregroundStyle(.secondary)
+        if document.status == .failed, let failureReason = document.failureReason {
+          Text(failureReason.message)
+            .font(.caption2)
+            .foregroundStyle(.red)
+            .lineLimit(2)
+        }
       }
 
       Spacer()
