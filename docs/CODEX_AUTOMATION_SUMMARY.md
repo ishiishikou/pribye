@@ -38,6 +38,7 @@
 | 2026-07-05 | GitHub PR は 0 件。最新 Actions は iOS run `28241199526` と TestFlight run `28241501046` が成功済みで、新規 CI 修正タスクはなし。Gemma解析は注入した `GemmaTextGenerating` 経由で `GemmaDocumentAnalyzer.analyze` がプロンプト生成とJSON正規化を通す単体テストを追加済みで、`git diff --check` は通過した。Windows環境のため iOS test は未実行。 |
 | 2026-07-06 | GitHub PR は 0 件。最新 Actions は iOS run `28241199526` と TestFlight run `28241501046` が成功済みで、新規 CI 修正タスクはなし。操作体験改善として、タスク一覧でフィルタ結果が空でも未完了/完了済み切り替えを表示し続けるようにした。 |
 | 2026-07-07 | GitHub PR は 0 件。最新 Actions は iOS run `28241199526` と TestFlight run `28241501046` が成功済みで、新規 CI 修正タスクはなし。操作体験改善として、プリント一覧の解析失敗行に失敗理由を表示するようにした。 |
+| 2026-07-08 | GitHub CLI token が無効でPR/Actions最新状態は取得できなかった。操作体験改善として、手動タスク登録の保存/キャンセルをナビゲーションバーへ移し、入力中でも保存導線を見失いにくくした。 |
 
 ## 次回へ残す要点
 
@@ -53,3 +54,4 @@
 | 2026-07-05 | Windows環境のため追加した Gemma injected-generator 単体テストは未実行。次回、macOS runner または Xcode 26 環境で `PribyeTests/DocumentAnalyzerTests.swift` を含む iOS test を確認する。 |
 | 2026-07-06 | Windows環境のためタスク一覧UX改善のSwiftUI表示確認は未実行。次回、iOS環境でタスクが全件完了済みの状態でも完了済みフィルタへ切り替えられることを確認する。 |
 | 2026-07-07 | Windows環境のためプリント一覧の失敗理由表示はSwiftUI表示確認未実行。次回、解析失敗したプリント行で理由が読み取れることをiOS環境で確認する。 |
+| 2026-07-08 | GitHub CLI token が無効なため、次回は `gh auth login -h github.com` で再認証後にPR/Actions最新状態を確認する。手動タスク登録の保存/キャンセル表示はiOS環境で確認する。 |

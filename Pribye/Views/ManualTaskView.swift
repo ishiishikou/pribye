@@ -12,6 +12,10 @@ struct ManualTaskView: View {
   @State private var dueDate: Date?
   @State private var hasDueDate = false
 
+  private var canSave: Bool {
+    !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
   var body: some View {
     Form {
       Section {
@@ -29,16 +33,22 @@ struct ManualTaskView: View {
           )
         }
       }
-
-      Section {
-        Button("保存") {
-          save()
-        }
-        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      }
     }
     .navigationTitle("手動登録")
     .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("キャンセル") {
+          dismiss()
+        }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("保存") {
+          save()
+        }
+        .disabled(!canSave)
+      }
+    }
   }
 
   private func save() {

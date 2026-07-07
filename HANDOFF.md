@@ -170,6 +170,7 @@ GitHub Actions:
 - 手動タスク追加
 - 設定
 - タスク詳細からの根拠ハイライト表示。根拠テキストと画像ハイライトを同じ画面で確認できる
+- 手動タスク追加では、保存/キャンセルをナビゲーションバーに表示し、入力中でも登録操作へ到達しやすくしている
 
 UI方針:
 
@@ -288,6 +289,7 @@ CIを通すために以下を修正済み:
 - iOS CI run `27857552838` で、`ImageAssetService.loadImageData` の `withCheckedThrowingContinuation` に `return` がなく Swift 6 build error になった問題を確認。`return try await` に修正し、あわせて `createPhotoAsset` の Photos callback で mutable captured var 警告が出ないよう同期 state に分離。
 - iOS CI run `27859101646` で、`CapturedPageImage.cropCorners` の default value が `CropPreview.defaultCorners` を参照し、Swift 6でMainActor隔離値扱いになってbuild errorになる問題を確認。四隅初期値をView型から独立したhelperへ分離して修正。
 - Gemma解析でモデル出力 `date` がある場合はその日付を優先し、`date` 欠落時はローカル `DateRangeParser` へフォールバックする挙動を単体テストで固定。
+- 手動タスク登録で、フォーム末尾の保存ボタンをナビゲーションバーの保存/キャンセルへ移し、空タイトル保存の防止は維持した。
 
 ## 現在の重要な制約
 
@@ -415,6 +417,7 @@ AdMobや将来の広告SDKへ、プリント画像、OCR、タスク名、抽出
 9. `docs/ADMOB_SETUP.md` に沿って、AdMob本番 App ID / banner ad unit IDへ差し替える。
 10. `docs/APP_PRIVACY.md` に沿って、AdMob採用後のApp Store privacy answersを更新する。
 11. `docs/STOREKIT_SETUP.md` に沿って、App Store Connectで広告非表示のアプリ内課金商品 `com.pribye.remove_ads` を作成し、StoreKit購入を検証する。
+12. GitHub CLI token が無効になっている場合は `gh auth login -h github.com` で再認証し、PR と GitHub Actions の最新状態を確認する。
 
 ## 次チャットでの推奨依頼
 
