@@ -94,11 +94,6 @@ struct TaskDetailView: View {
     }
     .navigationTitle("タスク詳細")
     .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        Button("編集") {}
-      }
-    }
     .sheet(item: $evidenceDocument) { document in
       NavigationStack {
         EvidenceHighlightView(document: document, task: task)
