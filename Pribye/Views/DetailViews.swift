@@ -161,10 +161,12 @@ struct DocumentDetailView: View {
 
       Section("抽出されたタスク") {
         if document.tasks.isEmpty {
-          Text("タスクはありません")
+          Text(emptyTaskMessage)
             .foregroundStyle(.secondary)
-          Button("手動でタスクを追加") {
-            router?.presentedSheet = .manualTask(documentID: document.id)
+          if document.status != .failed {
+            Button("手動でタスクを追加") {
+              router?.presentedSheet = .manualTask(documentID: document.id)
+            }
           }
         } else {
           ForEach(document.tasks) { task in
@@ -344,6 +346,17 @@ struct DocumentDetailView: View {
       dismiss()
     } catch {
       deleteErrorMessage = "写真アクセス権限または画像削除処理を確認してください。"
+    }
+  }
+
+  private var emptyTaskMessage: String {
+    switch document.status {
+    case .captured, .ocrProcessing, .aiProcessing:
+      return "解析が完了すると、抽出されたタスクがここに表示されます。"
+    case .failed:
+      return "解析に失敗したため、タスクは作成されていません。"
+    case .ready:
+      return "このプリントから登録が必要なタスクは見つかりませんでした。"
     }
   }
 }
