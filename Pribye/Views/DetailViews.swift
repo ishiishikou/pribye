@@ -83,6 +83,12 @@ struct TaskDetailView: View {
           }
         }
         .disabled(!task.hasCalendarDate || isRegisteringCalendar)
+
+        if !task.hasCalendarDate {
+          Text("期限があるタスクだけカレンダーに登録できます")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
       }
 
       if let calendarMessage {
