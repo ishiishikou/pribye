@@ -226,27 +226,21 @@ private struct LiteRTGemmaTextGenerator: GemmaTextGenerating {
     prompt: String,
     backend: GemmaInferenceBackend
   ) async throws -> String {
-    do {
-      let config = try EngineConfig(
-        modelPath: modelURL.path,
-        backend: backend.liteRTBackend,
-        maxNumTokens: 2048,
-        cacheDir: NSTemporaryDirectory()
-      )
-      let engine = Engine(engineConfig: config)
-      try await engine.initialize()
-      let conversation = try await engine.createConversation()
-      let response = try await conversation.sendMessage(Message(prompt))
-      let content = response.toString.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !content.isEmpty else {
-        throw DocumentAnalyzerError.malformedModelOutput
-      }
-      return content
-    } catch let error as DocumentAnalyzerError {
-      throw error
-    } catch {
-      throw DocumentAnalyzerError.modelLoadFailed
+    let config = try EngineConfig(
+      modelPath: modelURL.path,
+      backend: backend.liteRTBackend,
+      maxNumTokens: 2048,
+      cacheDir: NSTemporaryDirectory()
+    )
+    let engine = Engine(engineConfig: config)
+    try await engine.initialize()
+    let conversation = try await engine.createConversation()
+    let response = try await conversation.sendMessage(Message(prompt))
+    let content = response.toString.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !content.isEmpty else {
+      throw DocumentAnalyzerError.malformedModelOutput
     }
+    return content
   }
 }
 #endif
