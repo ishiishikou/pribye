@@ -15,6 +15,7 @@ jobs:
       APP_BUNDLE_ID: com.pribye.app
       TEAM_ID: 2QA6W85W3D
       BUILD_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.build_number != '' && inputs.build_number || github.run_number }}
+      LITERT_LM_VERSION: v0.14.0
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
@@ -53,6 +54,16 @@ jobs:
 
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Clone LiteRT-LM without Git LFS binaries
+        run: |
+          mkdir -p Vendor
+          GIT_LFS_SKIP_SMUDGE=1 git clone \
+            --depth 1 \
+            --branch "$LITERT_LM_VERSION" \
+            --single-branch \
+            https://github.com/google-ai-edge/LiteRT-LM.git \
+            Vendor/LiteRT-LM
 
       - name: Generate project
         run: xcodegen generate
