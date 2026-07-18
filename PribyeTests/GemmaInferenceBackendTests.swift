@@ -19,24 +19,32 @@ final class GemmaInferenceBackendTests: XCTestCase {
     super.tearDown()
   }
 
-  func testUnknownEnvironmentTriesGPUThenCPU() {
+  func testUnknownEnvironmentUsesGPUOnly() {
     let selector = makeSelector(environment: makeEnvironment())
 
-    XCTAssertEqual(selector.orderedBackends(), [.gpu, .cpu])
+    XCTAssertEqual(selector.orderedBackends(), [.gpu])
   }
 
-  func testSuccessfulCPUBackendIsUsedFirstNextTime() {
+  func testSuccessfulGPUBackendRemainsPreferred() {
     let environment = makeEnvironment()
     let selector = makeSelector(environment: environment)
 
-    selector.recordSuccess(.cpu)
+    selector.recordSuccess(.gpu)
 
-    XCTAssertEqual(makeSelector(environment: environment).orderedBackends(), [.cpu, .gpu])
+    XCTAssertEqual(makeSelector(environment: environment).orderedBackends(), [.gpu])
+  }
+
+  func testSavedCPUPreferenceIsIgnoredForE4B() {
+    let environment = makeEnvironment()
+    let store = GemmaBackendPreferenceStore(defaults: defaults)
+    store.save(.cpu, for: environment)
+
+    XCTAssertEqual(makeSelector(environment: environment).orderedBackends(), [.gpu])
   }
 
   func testPreferenceIsReevaluatedAfterEnvironmentChanges() {
     let environment = makeEnvironment()
-    makeSelector(environment: environment).recordSuccess(.cpu)
+    makeSelector(environment: environment).recordSuccess(.gpu)
 
     let updatedEnvironment = GemmaBackendEnvironment(
       hardwareIdentifier: environment.hardwareIdentifier,
@@ -45,7 +53,7 @@ final class GemmaInferenceBackendTests: XCTestCase {
       modelSHA256: environment.modelSHA256
     )
 
-    XCTAssertEqual(makeSelector(environment: updatedEnvironment).orderedBackends(), [.gpu, .cpu])
+    XCTAssertEqual(makeSelector(environment: updatedEnvironment).orderedBackends(), [.gpu])
   }
 
   private func makeSelector(

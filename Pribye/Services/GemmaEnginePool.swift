@@ -329,7 +329,7 @@ private struct LiteRTGemmaInferenceEngine: GemmaInferenceEngine {
       modelPath: modelURL.path,
       backend: backend.liteRTBackend,
       maxNumTokens: 2048,
-      cacheDir: NSTemporaryDirectory()
+      cacheDir: nil
     )
     engine = Engine(engineConfig: config)
   }
