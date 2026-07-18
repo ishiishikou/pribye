@@ -3,12 +3,14 @@ set -euo pipefail
 
 : "${LITERT_LM_VERSION:?LITERT_LM_VERSION is required}"
 : "${LITERT_LM_MAC_CHECKSUM:?LITERT_LM_MAC_CHECKSUM is required}"
+: "${LITERT_GPU_REF:?LITERT_GPU_REF is required}"
 
 PACKAGE_DIR="Vendor/LiteRT-LM"
+LITERT_ARCHIVE="$PWD/Vendor/LiteRT-$LITERT_GPU_REF.tar.gz"
 PREBUILT_DIR="$PACKAGE_DIR/Prebuilt"
 XCFRAMEWORK_PATH="$PREBUILT_DIR/CLiteRTLM.xcframework"
 
-rm -rf "$PACKAGE_DIR"
+rm -rf "$PACKAGE_DIR" "$LITERT_ARCHIVE"
 mkdir -p Vendor
 GIT_LFS_SKIP_SMUDGE=1 git clone \
   --depth 1 \
@@ -17,11 +19,61 @@ GIT_LFS_SKIP_SMUDGE=1 git clone \
   https://github.com/google-ai-edge/LiteRT-LM.git \
   "$PACKAGE_DIR"
 
+curl --fail --location --retry 3 \
+  "https://github.com/google-ai-edge/LiteRT/archive/$LITERT_GPU_REF.tar.gz" \
+  --output "$LITERT_ARCHIVE"
+
+LITERT_GPU_SHA256=$(shasum -a 256 "$LITERT_ARCHIVE" | awk '{print $1}')
+export LITERT_ARCHIVE LITERT_GPU_SHA256
+
 python3 - <<'PY'
 import os
+import re
+import tarfile
 from pathlib import Path
 
 package_dir = Path("Vendor/LiteRT-LM")
+litert_ref = os.environ["LITERT_GPU_REF"]
+litert_sha256 = os.environ["LITERT_GPU_SHA256"]
+litert_archive = Path(os.environ["LITERT_ARCHIVE"]).resolve()
+
+with tarfile.open(litert_archive, "r:gz") as archive:
+    build_path = f"LiteRT-{litert_ref}/litert/runtime/accelerators/gpu/BUILD"
+    member = archive.extractfile(build_path)
+    if member is None:
+        raise SystemExit(
+            "The selected LiteRT revision does not contain the public GPU accelerator package"
+        )
+    gpu_build_contents = member.read().decode("utf-8")
+    if gpu_build_contents.count('name = "ml_drift_metal_accelerator"') != 1:
+        raise SystemExit(
+            "The selected LiteRT revision does not expose exactly one Metal accelerator target"
+        )
+
+workspace = package_dir / "WORKSPACE"
+workspace_contents = workspace.read_text(encoding="utf-8")
+workspace_contents, ref_count = re.subn(
+    r'LITERT_REF = "[0-9a-f]+"',
+    f'LITERT_REF = "{litert_ref}"',
+    workspace_contents,
+    count=1,
+)
+workspace_contents, sha_count = re.subn(
+    r'LITERT_SHA256 = "[0-9a-f]+"',
+    f'LITERT_SHA256 = "{litert_sha256}"',
+    workspace_contents,
+    count=1,
+)
+old_url = 'url = "https://github.com/google-ai-edge/LiteRT/archive/" + LITERT_REF + ".tar.gz",'
+new_url = f'url = "{litert_archive.as_uri()}",'
+url_count = workspace_contents.count(old_url)
+workspace_contents = workspace_contents.replace(old_url, new_url)
+if (ref_count, sha_count, url_count) != (1, 1, 1):
+    raise SystemExit(
+        "Expected LiteRT-LM WORKSPACE LiteRT archive configuration was not found exactly once"
+    )
+workspace.write_text(workspace_contents, encoding="utf-8")
+
 build_file = package_dir / "runtime/executor/BUILD"
 build_contents = build_file.read_text(encoding="utf-8")
 
@@ -138,4 +190,4 @@ if ! (nm -a "$DEVICE_BINARY" 2>/dev/null || true) | grep -q 'CreateMlDriftMetalD
   exit 1
 fi
 
-echo "Prepared LiteRT-LM $LITERT_LM_VERSION with the statically linked iOS Metal accelerator."
+echo "Prepared LiteRT-LM $LITERT_LM_VERSION with LiteRT $LITERT_GPU_REF and the statically linked iOS Metal accelerator."
