@@ -8,6 +8,7 @@ jobs:
     runs-on: macos-15
     env:
       LITERT_LM_VERSION: v0.14.0
+      LITERT_GPU_REF: 0a0339003ab8e01b137e88238886a7f136e26866
       LITERT_LM_MAC_CHECKSUM: 450615483509aaa6d34b321fdc6862e41a224b674468ab10aff64ebe113d21b7
     steps:
       - uses: actions/checkout@v4
