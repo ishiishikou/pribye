@@ -16,6 +16,8 @@ jobs:
       TEAM_ID: 2QA6W85W3D
       BUILD_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.build_number != '' && inputs.build_number || github.run_number }}
       LITERT_LM_VERSION: v0.14.0
+      LITERT_LM_IOS_CHECKSUM: dddac2f6713ed65eaf01c18e115d9fec22184adf575cc7856a21387e8ba937e1
+      LITERT_LM_MAC_CHECKSUM: 450615483509aaa6d34b321fdc6862e41a224b674468ab10aff64ebe113d21b7
       APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
@@ -55,7 +57,7 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Clone LiteRT-LM without Git LFS binaries
+      - name: Prepare LiteRT-LM package
         run: |
           mkdir -p Vendor
           GIT_LFS_SKIP_SMUDGE=1 git clone \
@@ -64,6 +66,23 @@ jobs:
             --single-branch \
             https://github.com/google-ai-edge/LiteRT-LM.git \
             Vendor/LiteRT-LM
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          manifest = Path("Vendor/LiteRT-LM/Package.swift")
+          contents = manifest.read_text(encoding="utf-8")
+          replacements = {
+              "4a4bdb0e89689ceacc54c2fb7ae0efe8f5dad2404110976a29c3bf6b374a511e": os.environ["LITERT_LM_IOS_CHECKSUM"],
+              "13e818c9d3987afa87f0716884ebf0b6b10677b480717b8b098146e6b4f45847": os.environ["LITERT_LM_MAC_CHECKSUM"],
+          }
+          for old_checksum, new_checksum in replacements.items():
+              if contents.count(old_checksum) != 1:
+                  raise SystemExit(f"Expected LiteRT-LM checksum not found exactly once: {old_checksum}")
+              contents = contents.replace(old_checksum, new_checksum)
+          manifest.write_text(contents, encoding="utf-8")
+          PY
 
       - name: Generate project
         run: xcodegen generate
