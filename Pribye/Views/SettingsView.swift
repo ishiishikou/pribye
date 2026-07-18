@@ -172,7 +172,13 @@ struct SettingsView: View {
     }
     .alert("AIモデルを削除しますか？", isPresented: $showDeleteModelConfirmation) {
       Button("削除", role: .destructive) {
-        gemmaDownloadManager.deleteModelAndDownloadData()
+        Task {
+          await GemmaEnginePool.shared.releaseForModelDeletion {
+            await MainActor.run {
+              GemmaModelDownloadManager.shared.deleteModelAndDownloadData()
+            }
+          }
+        }
       }
       Button("キャンセル", role: .cancel) {}
     } message: {
