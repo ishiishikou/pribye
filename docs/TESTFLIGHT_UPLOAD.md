@@ -15,6 +15,8 @@
 - GitHub Actions secrets に登録する値は、チャットや issue に貼らない。
 - `iOS` workflow と `TestFlight Upload` workflow はどちらも手動実行のみ。
 - push だけでは GitHub Actions は起動しない。
+- LiteRT-LM は `v0.14.0` を `GIT_LFS_SKIP_SMUDGE=1` で `Vendor/LiteRT-LM` へcloneし、XcodeGenからローカルSwift Packageとして参照する。
+- このclone手順は、LiteRT-LMリポジトリ内のiOSでは不要なAndroid向けGit LFSオブジェクト欠落を回避するためのもの。上流のIssue #2407が解消したことを確認するまでは、通常のremote Swift Package参照へ戻さない。
 
 ## GitHub Actions secrets
 
@@ -133,6 +135,7 @@ GitHub repository で Settings > Secrets and variables > Actions > Repository se
 ## 失敗時に見る場所
 
 - secrets 未登録: `Validate secrets`
+- LiteRT-LMのcloneまたはタグ取得失敗: `Clone LiteRT-LM without Git LFS binaries`
 - certificate / password 不一致: `Install signing assets`
 - provisioning profile と Bundle ID 不一致: `Archive`
 - export option や署名設定の不一致: `Export IPA`
