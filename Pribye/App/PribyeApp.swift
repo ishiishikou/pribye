@@ -15,6 +15,7 @@ struct PribyeApp: App {
       at: URL.applicationSupportDirectory,
       withIntermediateDirectories: true
     )
+    _ = GemmaModelDownloadManager.shared
     #if canImport(GoogleMobileAds)
     MobileAds.shared.start()
     #endif
