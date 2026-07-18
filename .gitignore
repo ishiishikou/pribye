@@ -14,3 +14,4 @@ input/改善要望_*
 *.p8
 *.p12
 *.mobileprovision
+Vendor/LiteRT-LM/
