@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(LiteRTLM)
-import LiteRTLM
-#endif
 
 struct GemmaDocumentAnalyzer: DocumentAnalyzer {
   var shouldDeduplicateTasks: Bool { false }
@@ -178,27 +175,19 @@ private struct GemmaTaskResponse: Decodable {
 }
 
 #if canImport(LiteRTLM)
-private extension GemmaInferenceBackend {
-  var liteRTBackend: Backend {
-    switch self {
-    case .gpu:
-      return .gpu
-    case .cpu:
-      return .cpu()
-    }
-  }
-}
-
 private struct LiteRTGemmaTextGenerator: GemmaTextGenerating {
   var modelURL: URL
   private let backendSelector: GemmaInferenceBackendSelector
+  private let enginePool: GemmaEnginePool
 
   init(
     modelURL: URL,
-    backendSelector: GemmaInferenceBackendSelector = GemmaInferenceBackendSelector()
+    backendSelector: GemmaInferenceBackendSelector = GemmaInferenceBackendSelector(),
+    enginePool: GemmaEnginePool = .shared
   ) {
     self.modelURL = modelURL
     self.backendSelector = backendSelector
+    self.enginePool = enginePool
   }
 
   func generate(prompt: String) async throws -> String {
@@ -206,7 +195,12 @@ private struct LiteRTGemmaTextGenerator: GemmaTextGenerating {
 
     for backend in backendSelector.orderedBackends() {
       do {
-        let content = try await generate(prompt: prompt, backend: backend)
+        let content = try await enginePool.generate(
+          prompt: prompt,
+          modelURL: modelURL,
+          modelSHA256: GemmaModelStore.modelSHA256,
+          backend: backend
+        )
         backendSelector.recordSuccess(backend)
         NSLog("%@", "Gemma inference succeeded with \(backend.rawValue) backend.")
         return content
@@ -220,27 +214,6 @@ private struct LiteRTGemmaTextGenerator: GemmaTextGenerating {
       throw error
     }
     throw DocumentAnalyzerError.modelLoadFailed
-  }
-
-  private func generate(
-    prompt: String,
-    backend: GemmaInferenceBackend
-  ) async throws -> String {
-    let config = try EngineConfig(
-      modelPath: modelURL.path,
-      backend: backend.liteRTBackend,
-      maxNumTokens: 2048,
-      cacheDir: NSTemporaryDirectory()
-    )
-    let engine = Engine(engineConfig: config)
-    try await engine.initialize()
-    let conversation = try await engine.createConversation()
-    let response = try await conversation.sendMessage(Message(prompt))
-    let content = response.toString.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !content.isEmpty else {
-      throw DocumentAnalyzerError.malformedModelOutput
-    }
-    return content
   }
 }
 #endif
