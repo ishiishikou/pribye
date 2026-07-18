@@ -239,8 +239,8 @@ private struct LiteRTGemmaTextGenerator: GemmaTextGenerating {
         cacheDir: NSTemporaryDirectory()
       )
       let engine = Engine(engineConfig: config)
-      try engine.initialize()
-      let conversation = try engine.createConversation()
+      try await engine.initialize()
+      let conversation = try await engine.createConversation()
       let response = try await conversation.sendMessage(Message(prompt))
       let content = response.toString.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !content.isEmpty else {
