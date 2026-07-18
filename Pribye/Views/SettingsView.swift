@@ -7,9 +7,11 @@ struct SettingsView: View {
   @AppStorage("adsRemoved") private var adsRemoved = false
   @AppStorage("developmentSummaryPrompt") private var developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
   @StateObject private var purchaseService = PurchaseService()
-  @State private var gemmaModelStatus: GemmaModelStatus = .notDownloaded
-  @State private var isDownloadingGemmaModel = false
-  @State private var gemmaModelMessage: String?
+  @StateObject private var gemmaDownloadManager = GemmaModelDownloadManager.shared
+  @State private var showDownloadConfirmation = false
+  @State private var showCancelDownloadConfirmation = false
+  @State private var showDeleteModelConfirmation = false
+  @State private var allowsCellularDownload = false
 
   private var csvText: String {
     CSVExporter().export(documents: documents)
@@ -64,34 +66,50 @@ struct SettingsView: View {
         Label(gemmaModelStatusText, systemImage: gemmaModelStatusIcon)
           .foregroundStyle(gemmaModelStatusColor)
 
-        Text("解析にはGemma 4 E4Bのローカルモデルを使います。モデルはアプリに含めず、初回利用前にダウンロードします。")
+        Text("解析にはGemma 4 E4Bのローカルモデルを使います。モデルはアプリに含めず、このiPhone内に保存します。")
           .font(.footnote)
           .foregroundStyle(.secondary)
 
-        if isDownloadingGemmaModel {
-          HStack {
+        switch gemmaDownloadManager.state.phase {
+        case .downloading:
+          gemmaDownloadProgressView
+        case .verifying:
+          HStack(spacing: 12) {
             ProgressView()
-            Text("ダウンロード中")
+            VStack(alignment: .leading, spacing: 3) {
+              Text("モデルを検証中")
+              Text("ダウンロードしたファイルの整合性を確認しています。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
           }
-        } else {
-          Button {
-            Task { await downloadGemmaModel() }
-          } label: {
-            Label(gemmaModelStatus == .invalid ? "再ダウンロード" : "モデルをダウンロード", systemImage: "arrow.down.circle")
-          }
-          .disabled(gemmaModelStatus == .ready)
-
-          if gemmaModelStatus != .notDownloaded {
-            Button(role: .destructive) {
-              deleteGemmaModel()
+        case .idle, .failed:
+          if gemmaDownloadManager.modelStatus == .ready {
+            LabeledContent("使用容量", value: modelFileSizeText)
+            LabeledContent("保存場所", value: "このiPhone内")
+          } else {
+            Button {
+              showDownloadConfirmation = true
             } label: {
-              Label("モデルを削除", systemImage: "trash")
+              Label(
+                gemmaDownloadManager.modelStatus == .invalid ? "再ダウンロード" : "モデルをダウンロード",
+                systemImage: "arrow.down.circle"
+              )
             }
           }
         }
 
-        if let gemmaModelMessage {
-          Text(gemmaModelMessage)
+        if !gemmaDownloadManager.state.isActive,
+           gemmaDownloadManager.modelStatus != .notDownloaded {
+          Button(role: .destructive) {
+            showDeleteModelConfirmation = true
+          } label: {
+            Label("モデルを削除", systemImage: "trash")
+          }
+        }
+
+        if let message = gemmaDownloadManager.statusMessage {
+          Text(message)
             .font(.footnote)
             .foregroundStyle(.secondary)
         }
@@ -131,7 +149,7 @@ struct SettingsView: View {
     }
     .navigationTitle("設定")
     .task {
-      refreshGemmaModelStatus()
+      gemmaDownloadManager.refreshModelStatus()
       if developmentSummaryPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         developmentSummaryPrompt = FoundationModelsDocumentAnalyzer.defaultTaskExtractionInstructions
       }
@@ -141,6 +159,123 @@ struct SettingsView: View {
         adsRemoved = isRemoved
       }
     }
+    .sheet(isPresented: $showDownloadConfirmation) {
+      downloadConfirmationSheet
+    }
+    .alert("ダウンロードを中止しますか？", isPresented: $showCancelDownloadConfirmation) {
+      Button("中止する", role: .destructive) {
+        gemmaDownloadManager.cancelDownload()
+      }
+      Button("続ける", role: .cancel) {}
+    } message: {
+      Text("途中まで受信したデータは削除されます。再度利用する場合は最初からダウンロードします。")
+    }
+    .alert("AIモデルを削除しますか？", isPresented: $showDeleteModelConfirmation) {
+      Button("削除", role: .destructive) {
+        Task {
+          await GemmaEnginePool.shared.releaseForModelDeletion {
+            await MainActor.run {
+              GemmaModelDownloadManager.shared.deleteModelAndDownloadData()
+            }
+          }
+        }
+      }
+      Button("キャンセル", role: .cancel) {}
+    } message: {
+      Text("端末の空き容量が増えます。AI解析を再び利用するには、モデルの再ダウンロードが必要です。")
+    }
+  }
+
+  private var gemmaDownloadProgressView: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      if let progress = gemmaDownloadManager.state.progress {
+        ProgressView(value: progress)
+        HStack {
+          Text(progress.formatted(.percent.precision(.fractionLength(0))))
+            .font(.headline.monospacedDigit())
+          Spacer()
+          Text("\(formattedBytes(gemmaDownloadManager.state.bytesDownloaded)) / \(formattedBytes(gemmaDownloadManager.state.totalBytes))")
+            .font(.footnote.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+      } else {
+        ProgressView()
+        Text(formattedBytes(gemmaDownloadManager.state.bytesDownloaded))
+          .font(.footnote.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+
+      if gemmaDownloadManager.state.bytesPerSecond > 0 {
+        HStack {
+          Text("\(formattedSpeed(gemmaDownloadManager.state.bytesPerSecond))")
+          Spacer()
+          if let remaining = gemmaDownloadManager.state.estimatedTimeRemaining {
+            Text("残り約\(formattedDuration(remaining))")
+          }
+        }
+        .font(.footnote.monospacedDigit())
+        .foregroundStyle(.secondary)
+      }
+
+      Label {
+        Text("別の画面を開いたり、ホーム画面へ戻ったりしてもダウンロードは続きます。アプリを強制終了すると中断します。")
+      } icon: {
+        Image(systemName: "iphone.and.arrow.forward")
+      }
+      .font(.footnote)
+      .foregroundStyle(.secondary)
+
+      Button(role: .destructive) {
+        showCancelDownloadConfirmation = true
+      } label: {
+        Label("ダウンロードを中止", systemImage: "xmark.circle")
+      }
+    }
+  }
+
+  private var downloadConfirmationSheet: some View {
+    NavigationStack {
+      List {
+        Section {
+          Label("約3.66GBの空き容量を使用します", systemImage: "internaldrive")
+          Label("この画面を閉じてもダウンロードを継続します", systemImage: "arrow.down.circle")
+          Label("ダウンロード後は設定からいつでも削除できます", systemImage: "trash")
+        }
+
+        Section("通信設定") {
+          Toggle("モバイル通信を許可", isOn: $allowsCellularDownload)
+          Text(allowsCellularDownload
+               ? "Wi-Fiが利用できない場合はモバイル通信を使用します。通信量に注意してください。"
+               : "Wi-Fiに接続するまで待機し、モバイル通信は使用しません。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+
+        Section {
+          Text("ダウンロード中は別の画面やホーム画面へ移動して構いません。アプリを強制終了するとダウンロードは中断します。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .navigationTitle("AIモデルをダウンロード")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("キャンセル") {
+            showDownloadConfirmation = false
+          }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("開始") {
+            showDownloadConfirmation = false
+            gemmaDownloadManager.startDownload(
+              allowsCellularAccess: allowsCellularDownload
+            )
+          }
+        }
+      }
+    }
+    .presentationDetents([.medium, .large])
   }
 
   private var removeAdsButtonTitle: String {
@@ -151,64 +286,90 @@ struct SettingsView: View {
   }
 
   private var gemmaModelStatusText: String {
-    switch gemmaModelStatus {
-    case .notDownloaded:
-      return "AIモデル未ダウンロード"
-    case .ready:
-      return "AIモデル準備完了"
-    case .invalid:
-      return "AIモデル検証失敗"
+    switch gemmaDownloadManager.state.phase {
+    case .downloading:
+      return "AIモデルをダウンロード中"
+    case .verifying:
+      return "AIモデルを検証中"
+    case .failed:
+      return "AIモデルの準備に失敗"
+    case .idle:
+      switch gemmaDownloadManager.modelStatus {
+      case .notDownloaded:
+        return "AIモデル未ダウンロード"
+      case .ready:
+        return "AIモデル準備完了"
+      case .invalid:
+        return "AIモデル検証失敗"
+      }
     }
   }
 
   private var gemmaModelStatusIcon: String {
-    switch gemmaModelStatus {
-    case .notDownloaded:
-      return "icloud.and.arrow.down"
-    case .ready:
-      return "checkmark.circle.fill"
-    case .invalid:
+    switch gemmaDownloadManager.state.phase {
+    case .downloading:
+      return "arrow.down.circle.fill"
+    case .verifying:
+      return "checkmark.shield"
+    case .failed:
       return "exclamationmark.triangle.fill"
+    case .idle:
+      switch gemmaDownloadManager.modelStatus {
+      case .notDownloaded:
+        return "icloud.and.arrow.down"
+      case .ready:
+        return "checkmark.circle.fill"
+      case .invalid:
+        return "exclamationmark.triangle.fill"
+      }
     }
   }
 
   private var gemmaModelStatusColor: Color {
-    switch gemmaModelStatus {
-    case .notDownloaded:
-      return .secondary
-    case .ready:
-      return .green
-    case .invalid:
+    switch gemmaDownloadManager.state.phase {
+    case .downloading, .verifying:
+      return .blue
+    case .failed:
       return .orange
+    case .idle:
+      switch gemmaDownloadManager.modelStatus {
+      case .notDownloaded:
+        return .secondary
+      case .ready:
+        return .green
+      case .invalid:
+        return .orange
+      }
     }
   }
 
-  private func refreshGemmaModelStatus() {
-    gemmaModelStatus = GemmaModelStore.shared.status()
+  private var modelFileSizeText: String {
+    formattedBytes(
+      GemmaModelStore.shared.modelFileSize
+        ?? GemmaModelStore.estimatedDownloadSizeBytes
+    )
   }
 
-  @MainActor
-  private func downloadGemmaModel() async {
-    isDownloadingGemmaModel = true
-    gemmaModelMessage = "約3.66GBのモデルをダウンロードします。完了後にハッシュ検証します。"
-    do {
-      try await GemmaModelStore.shared.downloadModel()
-      refreshGemmaModelStatus()
-      gemmaModelMessage = "モデルの準備が完了しました。"
-    } catch {
-      refreshGemmaModelStatus()
-      gemmaModelMessage = "モデルのダウンロードまたは検証に失敗しました。"
-    }
-    isDownloadingGemmaModel = false
+  private func formattedBytes(_ bytes: Int64) -> String {
+    ByteCountFormatter.string(fromByteCount: max(bytes, 0), countStyle: .file)
   }
 
-  private func deleteGemmaModel() {
-    do {
-      try GemmaModelStore.shared.deleteModel()
-      refreshGemmaModelStatus()
-      gemmaModelMessage = "モデルを削除しました。"
-    } catch {
-      gemmaModelMessage = "モデルを削除できませんでした。"
+  private func formattedSpeed(_ bytesPerSecond: Double) -> String {
+    "\(formattedBytes(Int64(max(bytesPerSecond, 0))))/秒"
+  }
+
+  private func formattedDuration(_ duration: TimeInterval) -> String {
+    let seconds = max(Int(duration.rounded()), 0)
+    let hours = seconds / 3_600
+    let minutes = (seconds % 3_600) / 60
+    let remainingSeconds = seconds % 60
+
+    if hours > 0 {
+      return "\(hours)時間\(minutes)分"
     }
+    if minutes > 0 {
+      return "\(minutes)分\(remainingSeconds)秒"
+    }
+    return "\(remainingSeconds)秒"
   }
 }
