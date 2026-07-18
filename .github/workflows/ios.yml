@@ -6,6 +6,8 @@ on:
 jobs:
   build-test:
     runs-on: macos-15
+    env:
+      LITERT_LM_VERSION: v0.14.0
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26
@@ -16,6 +18,15 @@ jobs:
           xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Clone LiteRT-LM without Git LFS binaries
+        run: |
+          mkdir -p Vendor
+          GIT_LFS_SKIP_SMUDGE=1 git clone \
+            --depth 1 \
+            --branch "$LITERT_LM_VERSION" \
+            --single-branch \
+            https://github.com/google-ai-edge/LiteRT-LM.git \
+            Vendor/LiteRT-LM
       - name: Generate project
         run: xcodegen generate
       - name: Build and test
