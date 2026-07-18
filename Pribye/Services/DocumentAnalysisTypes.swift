@@ -124,6 +124,8 @@ struct GemmaBackendPreferenceStore: @unchecked Sendable {
 }
 
 struct GemmaInferenceBackendSelector: Sendable {
+  private static let supportedBackends: [GemmaInferenceBackend] = [.gpu]
+
   private let environment: GemmaBackendEnvironment
   private let preferenceStore: GemmaBackendPreferenceStore
 
@@ -136,13 +138,19 @@ struct GemmaInferenceBackendSelector: Sendable {
   }
 
   func orderedBackends() -> [GemmaInferenceBackend] {
-    guard let preferredBackend = preferenceStore.preferredBackend(for: environment) else {
-      return [.gpu, .cpu]
+    guard
+      let preferredBackend = preferenceStore.preferredBackend(for: environment),
+      Self.supportedBackends.contains(preferredBackend)
+    else {
+      return Self.supportedBackends
     }
-    return [preferredBackend] + GemmaInferenceBackend.allCases.filter { $0 != preferredBackend }
+    return [preferredBackend] + Self.supportedBackends.filter { $0 != preferredBackend }
   }
 
   func recordSuccess(_ backend: GemmaInferenceBackend) {
+    guard Self.supportedBackends.contains(backend) else {
+      return
+    }
     preferenceStore.save(backend, for: environment)
   }
 }
