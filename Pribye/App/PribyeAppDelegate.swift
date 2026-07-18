@@ -12,4 +12,10 @@ final class PribyeAppDelegate: NSObject, UIApplicationDelegate {
       for: identifier
     )
   }
+
+  func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+    Task {
+      await GemmaEnginePool.shared.releaseForMemoryWarning()
+    }
+  }
 }
