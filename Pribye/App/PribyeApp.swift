@@ -8,6 +8,8 @@ import UserNotifications
 
 @main
 struct PribyeApp: App {
+  @UIApplicationDelegateAdaptor(PribyeAppDelegate.self) private var appDelegate
+
   init() {
     try? FileManager.default.createDirectory(
       at: URL.applicationSupportDirectory,
