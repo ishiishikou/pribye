@@ -8,9 +8,17 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-upload
+  cancel-in-progress: false
+
 jobs:
   upload:
     runs-on: macos-15
+    timeout-minutes: 240
     env:
       APP_BUNDLE_ID: com.pribye.app
       TEAM_ID: 2QA6W85W3D
@@ -26,7 +34,9 @@ jobs:
       BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
       KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
       - name: Validate secrets
         run: |
@@ -174,3 +184,4 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
           rm -rf "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/appstore.mobileprovision" "$RUNNER_TEMP/profile.plist"
