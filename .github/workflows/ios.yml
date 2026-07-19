@@ -10,18 +10,45 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  LITERT_LM_REF: a24de83834ad5419ab2f493dc0f4c15b4b67d0ec
+  LITERT_REF: ac4e6fca88306c637ad0f319b4a22a93c36d01f3
+  LITERT_PREFLIGHT_ARTIFACT: litert-preflight-${{ github.sha }}
+
 jobs:
-  build-test:
-    runs-on: macos-15
-    timeout-minutes: 180
-    env:
-      LITERT_LM_VERSION: v0.14.0
-      LITERT_GPU_REF: 0a0339003ab8e01b137e88238886a7f136e26866
-      LITERT_LM_MAC_CHECKSUM: 450615483509aaa6d34b321fdc6862e41a224b674468ab10aff64ebe113d21b7
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+      - name: Fetch and inspect aligned LiteRT sources
+        env:
+          LITERT_PREPARE_MODE: preflight
+        run: bash scripts/prepare_litert_lm.sh
+      - name: Upload validated LiteRT source bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.LITERT_PREFLIGHT_ARTIFACT }}
+          path: Vendor/litert-preflight.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  build-test:
+    needs: preflight
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Download validated LiteRT source bundle
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: ${{ env.LITERT_PREFLIGHT_ARTIFACT }}
+          path: Vendor
       - name: Select Xcode 26
         run: |
           XCODE_PATH=$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' -print | sort | tail -1)
@@ -30,7 +57,9 @@ jobs:
           xcodebuild -version
       - name: Install build tools
         run: brew install bazelisk xcodegen
-      - name: Prepare LiteRT-LM with Metal
+      - name: Build LiteRT-LM with statically linked Metal accelerator
+        env:
+          LITERT_PREPARE_MODE: build
         run: bash scripts/prepare_litert_lm.sh
       - name: Generate project
         run: xcodegen generate
