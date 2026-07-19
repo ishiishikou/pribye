@@ -11,7 +11,27 @@ build/
 input/改善要望.md
 input/改善要望_*
 !input/改善要望_TEMPLATE.md
+
+# Local secrets and signing assets
+.env
+.env.*
+!.env.example
 *.p8
 *.p12
+*.key
+*.csr
+*.cer
+*.pem
 *.mobileprovision
+*.base64.txt
+AuthKey_*.p8
+GoogleService-Info.plist
+Secrets.xcconfig
+*.private.xcconfig
+
+# Build and distribution outputs
+*.ipa
+*.xcarchive
 Vendor/LiteRT-LM/
+Vendor/LiteRT-*.tar.gz
+Vendor/LiteRT-*.tar.gz.patched
