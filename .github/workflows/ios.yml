@@ -3,15 +3,25 @@ name: iOS
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-test:
     runs-on: macos-15
+    timeout-minutes: 180
     env:
       LITERT_LM_VERSION: v0.14.0
       LITERT_GPU_REF: 0a0339003ab8e01b137e88238886a7f136e26866
       LITERT_LM_MAC_CHECKSUM: 450615483509aaa6d34b321fdc6862e41a224b674468ab10aff64ebe113d21b7
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
       - name: Select Xcode 26
         run: |
           XCODE_PATH=$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' -print | sort | tail -1)
